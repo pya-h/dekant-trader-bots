@@ -1,4 +1,5 @@
 import postgres from "postgres";
+import type { StructuredLogger } from "../observability/logger.js";
 import {
   BotsStateFile,
   RuntimeConfigFile,
@@ -10,8 +11,26 @@ import type { StateStore } from "./state-store.js";
 export class PgStateStore implements StateStore {
   private sql: postgres.Sql;
 
-  constructor(databaseUrl: string) {
-    this.sql = postgres(databaseUrl);
+  constructor(databaseUrl: string, logger?: StructuredLogger) {
+    this.sql = postgres(databaseUrl, {
+      onnotice: (notice) => {
+        const fields = {
+          severity: notice.severity,
+          code: notice.code,
+          message: notice.message,
+          ...(notice.detail ? { detail: notice.detail } : {}),
+          ...(notice.hint ? { hint: notice.hint } : {})
+        };
+        const severity = (notice.severity ?? "").toUpperCase();
+        if (severity === "WARNING") {
+          logger?.warn?.("pg_notice", fields);
+        } else if (severity === "DEBUG" || severity === "INFO" || severity === "LOG") {
+          logger?.debug?.("pg_notice", fields);
+        } else {
+          logger?.info?.("pg_notice", fields);
+        }
+      }
+    });
   }
 
   async initialize(): Promise<void> {

@@ -1,9 +1,11 @@
 import { z } from "zod";
 
 import { RuntimeConfigFile } from "./state/types.js";
+import type { LogLevel } from "./observability/logger.js";
 
 const envSchema = z.object({
   NODE_ENV: z.string().default("development"),
+  LOG_LEVEL: z.enum(["debug", "info", "warn", "error", "silent"]).default("info"),
   HOST: z.string().default("0.0.0.0"),
   PORT: z.coerce.number().int().positive().default(3000),
   ADMIN_SECRET: z.string().min(1),
@@ -38,6 +40,7 @@ const envSchema = z.object({
 
 export type EnvConfig = {
   nodeEnv: string;
+  logLevel: LogLevel;
   host: string;
   port: number;
   adminSecret: string;
@@ -126,6 +129,7 @@ export function loadEnvConfig(env: NodeJS.ProcessEnv = process.env): EnvConfig {
 
   return {
     nodeEnv: parsed.NODE_ENV,
+    logLevel: parsed.LOG_LEVEL,
     host: parsed.HOST,
     port: parsed.PORT,
     adminSecret: parsed.ADMIN_SECRET,

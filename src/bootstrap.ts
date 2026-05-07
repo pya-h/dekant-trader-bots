@@ -1,4 +1,5 @@
 import { buildAppConfig, EnvConfig, loadEnvConfig } from "./config.js";
+import type { StructuredLogger } from "./observability/logger.js";
 import { BotsStateFile, RuntimeConfigFile } from "./state/types.js";
 import type { StateStore } from "./storage/state-store.js";
 
@@ -34,28 +35,41 @@ export type BootstrapState = {
 
 export async function bootstrapState(
   env: NodeJS.ProcessEnv = process.env,
-  store?: StateStore
+  store?: StateStore,
+  logger?: StructuredLogger
 ): Promise<{
   envConfig: ReturnType<typeof loadEnvConfig>;
   state: BootstrapState;
 }> {
   const envConfig = loadEnvConfig(env);
+  logger?.debug?.("env_config_loaded", {
+    nodeEnv: envConfig.nodeEnv,
+    logLevel: envConfig.logLevel,
+    host: envConfig.host,
+    port: envConfig.port,
+    initialBotCount: envConfig.botFleet.initialBotCount
+  });
 
   if (!store) {
     if (!envConfig.databaseUrl) {
       throw new Error("DATABASE_URL is required when no store is provided");
     }
 
+    logger?.info?.("state_store_initializing", { driver: "postgres" });
     const { PgStateStore } = await import("./storage/pg-state-store.js");
-    store = new PgStateStore(envConfig.databaseUrl);
+    store = new PgStateStore(envConfig.databaseUrl, logger);
   }
 
   await store.initialize();
+  logger?.debug?.("state_store_ready");
 
   const existingRuntime = await store.loadRuntimeConfig();
   const runtimeConfig = existingRuntime ?? makeInitialRuntimeConfig(envConfig);
   if (!existingRuntime) {
+    logger?.info?.("runtime_config_seeded");
     await store.saveRuntimeConfig(runtimeConfig);
+  } else {
+    logger?.debug?.("runtime_config_loaded", { updatedAt: existingRuntime.updatedAt });
   }
 
   const existingBots = await store.loadBotsState();
@@ -65,7 +79,10 @@ export async function bootstrapState(
     bots: []
   };
   if (!existingBots) {
+    logger?.info?.("bots_state_seeded");
     await store.saveBotsState(botsState);
+  } else {
+    logger?.debug?.("bots_state_loaded", { botCount: existingBots.bots.length });
   }
 
   return {
