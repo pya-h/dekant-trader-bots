@@ -1,4 +1,5 @@
 import Fastify, { FastifyInstance } from "fastify";
+import { z } from "zod";
 import { AppConfig } from "./config.js";
 
 type StatusRuntimeSnapshot = {
@@ -11,11 +12,35 @@ type StatusRuntimeSnapshot = {
   initialFundingScheduled: boolean;
 };
 
+type RuntimeSnapshotInput = StatusRuntimeSnapshot | (() => StatusRuntimeSnapshot | null);
+
+type AdminHandlers = {
+  forceBuy?: (input: { marketIds?: string[] }) => Promise<unknown>;
+};
+
+const forceBuyBodySchema = z
+  .object({
+    market_ids: z.array(z.string()).optional()
+  })
+  .strict();
+
 export function buildApp(
   config: AppConfig,
-  runtimeSnapshot?: StatusRuntimeSnapshot
+  runtimeSnapshot?: RuntimeSnapshotInput,
+  adminHandlers: AdminHandlers = {}
 ): FastifyInstance {
   const app = Fastify({ logger: false });
+  const resolveRuntimeSnapshot = () => {
+    if (!runtimeSnapshot) {
+      return null;
+    }
+
+    if (typeof runtimeSnapshot === "function") {
+      return runtimeSnapshot();
+    }
+
+    return runtimeSnapshot;
+  };
 
   app.get("/health", async () => {
     return { status: "ok" };
@@ -26,7 +51,7 @@ export function buildApp(
       adminScope.addHook("onRequest", async (request, reply) => {
         const securityHeader = request.headers["x-security"];
         if (securityHeader !== config.adminSecret) {
-          reply.code(401).send({ error: "unauthorized" });
+          return reply.code(401).send({ error: "unauthorized" });
         }
       });
 
@@ -34,7 +59,27 @@ export function buildApp(
         return {
           status: "ok",
           service: "dekant-trader-bots",
-          runtime: runtimeSnapshot ?? null
+          runtime: resolveRuntimeSnapshot()
+        };
+      });
+
+      adminScope.post("/bots/buy", async (request, reply) => {
+        if (!adminHandlers.forceBuy) {
+          return reply.code(503).send({ error: "buy_engine_unavailable" });
+        }
+
+        const parsed = forceBuyBodySchema.safeParse(request.body ?? {});
+        if (!parsed.success) {
+          return reply.code(400).send({ error: "invalid_payload" });
+        }
+
+        const cycle = await adminHandlers.forceBuy({
+          marketIds: parsed.data.market_ids
+        });
+
+        return {
+          status: "ok",
+          cycle
         };
       });
     },

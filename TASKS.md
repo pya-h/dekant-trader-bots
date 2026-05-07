@@ -136,7 +136,7 @@ E2E tests:
 Exit criteria:
 - Active market cache is reliable and filter-correct.
 
-## Phase 7 - Buy Engine
+## [x] Phase 7 - Buy Engine
 - Implement per-buy-tick sequence:
   - collect active markets
   - fetch unique token prices once

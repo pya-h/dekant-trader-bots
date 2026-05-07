@@ -9,6 +9,12 @@ import { FaucetClient } from "./clients/faucet-client.js";
 import { DekantClient } from "./clients/dekant-client.js";
 import { BalanceClient, FundingEngine, ManualFundRequest, VaultClient } from "./funding/engine.js";
 import { MarketCache } from "./markets/cache.js";
+import {
+  BuyEngine,
+  BuyEngineDekantTradingClient,
+  BuyEngineIntervalProvider,
+  BuyEnginePriceClient
+} from "./trading/buy-engine.js";
 
 dotenv.config({ quiet: true });
 
@@ -26,6 +32,13 @@ export type AppInitializationOptions = {
   marketCache?: {
     client: DekantClient;
     refreshIntervalMs?: number;
+  };
+  buy?: {
+    dekant: BuyEngineDekantTradingClient;
+    price: BuyEnginePriceClient;
+    now?: () => Date;
+    random?: () => number;
+    timer?: BuyEngineIntervalProvider;
   };
 };
 
@@ -81,15 +94,47 @@ export async function createInitializedApp(
         random: options.funding.random
       })
     : null;
-  const app = buildApp(config, {
-    stateDir: config.stateDir,
-    botCount: state.botsState.bots.length,
-    buyChance: config.runtime.trading.buyChance,
-    sellChance: config.runtime.trading.sellChance,
-    maxAmount: config.runtime.trading.maxAmount,
-    createdBotsOnStartup: reconciliation.createdBots.length,
-    initialFundingScheduled: fundingSchedule.scheduled
-  });
+  const buyEngine =
+    options.buy && marketCache
+      ? new BuyEngine({
+          runtime: {
+            buyChance: config.runtime.trading.buyChance,
+            maxAmount: config.runtime.trading.maxAmount,
+            intervalMs: config.intervals.buyMs
+          },
+          clients: {
+            dekant: options.buy.dekant,
+            price: options.buy.price
+          },
+          getBots: () => state.botsState.bots,
+          getMarkets: () => marketCache.getSnapshot().markets,
+          now: options.buy.now,
+          random: options.buy.random,
+          timer: options.buy.timer
+        })
+      : null;
+
+  const app = buildApp(
+    config,
+    () => ({
+      stateDir: config.stateDir,
+      botCount: state.botsState.bots.length,
+      buyChance: config.runtime.trading.buyChance,
+      sellChance: config.runtime.trading.sellChance,
+      maxAmount: config.runtime.trading.maxAmount,
+      createdBotsOnStartup: reconciliation.createdBots.length,
+      initialFundingScheduled: fundingSchedule.scheduled
+    }),
+    buyEngine
+      ? {
+          forceBuy: async (input: { marketIds?: string[] }) =>
+            buyEngine.runCycle({
+              source: "manual",
+              marketIds: input.marketIds
+            })
+        }
+      : {}
+  );
 
   return {
     app,
@@ -147,6 +192,18 @@ export async function createInitializedApp(
           setIgnoredMarketIds: (ids: string[]) => marketCache.setIgnoredMarketIds(ids),
           addIgnoredMarketIds: (ids: string[]) => marketCache.addIgnoredMarketIds(ids),
           removeIgnoredMarketIds: (ids: string[]) => marketCache.removeIgnoredMarketIds(ids)
+        }
+      : null,
+    buy: buyEngine
+      ? {
+          runCycle: async (marketIds?: string[]) =>
+            buyEngine.runCycle({
+              source: "manual",
+              marketIds
+            }),
+          start: async () => buyEngine.start({ immediate: true }),
+          stop: () => buyEngine.stop(),
+          getSnapshot: () => buyEngine.getSnapshot()
         }
       : null
   };

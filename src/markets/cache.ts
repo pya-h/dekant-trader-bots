@@ -18,7 +18,7 @@ export function filterEligibleMarkets(options: {
 }): DekantMarket[] {
   return options.markets.filter((market) => {
     const category = market.category?.toLowerCase();
-    if (category !== undefined && category !== "crypto") {
+    if (category !== "crypto") {
       return false;
     }
 
