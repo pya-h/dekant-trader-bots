@@ -15,4 +15,29 @@ describe("buildApp", () => {
 
     await expect(app.close()).resolves.toBeUndefined();
   });
+
+  it("rejects config patch payloads that attempt interval mutation", async () => {
+    const app = buildApp(testConfig, undefined, {
+      updateRuntimeConfig: async () => ({})
+    });
+
+    await app.ready();
+    const response = await app.inject({
+      method: "PATCH",
+      url: "/admin/config",
+      headers: {
+        "x-security": testConfig.adminSecret
+      },
+      payload: {
+        intervals: {
+          buyMs: 1000
+        }
+      }
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toEqual({ error: "invalid_payload" });
+
+    await app.close();
+  });
 });

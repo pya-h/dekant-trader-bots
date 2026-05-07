@@ -9,12 +9,20 @@ import { FaucetClient } from "./clients/faucet-client.js";
 import { DekantClient } from "./clients/dekant-client.js";
 import { BalanceClient, FundingEngine, ManualFundRequest, VaultClient } from "./funding/engine.js";
 import { MarketCache } from "./markets/cache.js";
+import { runtimeConfigSchema } from "./state/types.js";
+import { saveRuntimeConfig } from "./storage/runtime-config-store.js";
 import {
   BuyEngine,
   BuyEngineDekantTradingClient,
   BuyEngineIntervalProvider,
   BuyEnginePriceClient
 } from "./trading/buy-engine.js";
+import {
+  SellEngine,
+  SellEngineDekantSellingClient,
+  SellEngineIntervalProvider,
+  SellEnginePriceClient
+} from "./trading/sell-engine.js";
 
 dotenv.config({ quiet: true });
 
@@ -40,7 +48,43 @@ export type AppInitializationOptions = {
     random?: () => number;
     timer?: BuyEngineIntervalProvider;
   };
+  sell?: {
+    dekant: SellEngineDekantSellingClient;
+    price: SellEnginePriceClient;
+    now?: () => Date;
+    random?: () => number;
+    timer?: SellEngineIntervalProvider;
+  };
 };
+
+type RuntimeConfigPatchInput = {
+  trading?: {
+    buyChance?: number;
+    sellChance?: number;
+    maxAmount?: number;
+    prefundMultiplier?: number;
+  };
+  funding?: {
+    emergencyTopupCooldownMs?: number;
+    minBotSol?: number;
+    vaultSupportedTokens?: string[];
+  };
+  price?: {
+    stalePricePolicy?: "skip" | "allow";
+  };
+};
+
+function unique(values: string[]): string[] {
+  return [...new Set(values)];
+}
+
+function normalizeMarketIds(ids: string[]): string[] {
+  return unique(ids.map((id) => id.trim()).filter((id) => id.length > 0));
+}
+
+function normalizeTokens(tokens: string[]): string[] {
+  return unique(tokens.map((token) => token.trim().toUpperCase()).filter((token) => token.length > 0));
+}
 
 export async function createInitializedApp(
   env: NodeJS.ProcessEnv = process.env,
@@ -113,27 +157,152 @@ export async function createInitializedApp(
           timer: options.buy.timer
         })
       : null;
+  const sellEngine =
+    options.sell && marketCache
+      ? new SellEngine({
+          runtime: {
+            sellChance: config.runtime.trading.sellChance,
+            intervalMs: config.intervals.sellMs
+          },
+          clients: {
+            dekant: options.sell.dekant,
+            price: options.sell.price
+          },
+          getBots: () => state.botsState.bots,
+          getMarkets: () => marketCache.getSnapshot().markets,
+          now: options.sell.now,
+          random: options.sell.random,
+          timer: options.sell.timer
+        })
+      : null;
+  const balanceClient = options.funding?.balances ?? null;
+
+  const persistRuntimeConfig = async (nextConfig: (typeof state.runtimeConfig)["config"]) => {
+    const validatedConfig = runtimeConfigSchema.parse(nextConfig);
+    state.runtimeConfig = {
+      ...state.runtimeConfig,
+      updatedAt: new Date().toISOString(),
+      config: validatedConfig
+    };
+    await saveRuntimeConfig(state.files.runtimeConfigPath, state.runtimeConfig);
+  };
+
+  const addIgnoredMarketIds = async (ids: string[]) => {
+    const normalized = normalizeMarketIds(ids);
+    const nextIgnored = unique([...state.runtimeConfig.config.ignoredMarketIds, ...normalized]);
+    const nextConfig = {
+      ...state.runtimeConfig.config,
+      ignoredMarketIds: nextIgnored
+    };
+    await persistRuntimeConfig(nextConfig);
+    marketCache?.setIgnoredMarketIds(nextIgnored);
+    return { ignoredMarketIds: nextIgnored };
+  };
+
+  const removeIgnoredMarketIds = async (ids: string[]) => {
+    const normalizedSet = new Set(normalizeMarketIds(ids));
+    const nextIgnored = state.runtimeConfig.config.ignoredMarketIds.filter((id) => !normalizedSet.has(id));
+    const nextConfig = {
+      ...state.runtimeConfig.config,
+      ignoredMarketIds: nextIgnored
+    };
+    await persistRuntimeConfig(nextConfig);
+    marketCache?.setIgnoredMarketIds(nextIgnored);
+    return { ignoredMarketIds: nextIgnored };
+  };
+
+  const updateRuntimeConfig = async (patch: RuntimeConfigPatchInput) => {
+    const current = state.runtimeConfig.config;
+    const nextConfig = runtimeConfigSchema.parse({
+      ...current,
+      trading: {
+        ...current.trading,
+        ...(patch.trading ?? {})
+      },
+      funding: {
+        ...current.funding,
+        ...(patch.funding ?? {}),
+        ...(patch.funding?.vaultSupportedTokens
+          ? {
+              vaultSupportedTokens: normalizeTokens(patch.funding.vaultSupportedTokens)
+            }
+          : {})
+      },
+      price: {
+        ...current.price,
+        ...(patch.price ?? {})
+      }
+    });
+
+    await persistRuntimeConfig(nextConfig);
+    return state.runtimeConfig.config;
+  };
+
+  const getBotBalances = async (input: { page: number; pageSize: number }) => {
+    if (!balanceClient) {
+      throw new Error("balances_unavailable");
+    }
+
+    const bots = state.botsState.bots;
+    const total = bots.length;
+    const offset = (input.page - 1) * input.pageSize;
+    const selected = bots.slice(offset, offset + input.pageSize);
+    const tokens = state.runtimeConfig.config.funding.vaultSupportedTokens;
+
+    const items = await Promise.all(
+      selected.map(async (bot) => {
+        const balance = await balanceClient.getBotBalance(bot.publicKey, tokens);
+        return {
+          botId: bot.id,
+          address: bot.publicKey,
+          sol: balance.sol,
+          tokens: balance.tokens
+        };
+      })
+    );
+
+    return {
+      page: input.page,
+      pageSize: input.pageSize,
+      total,
+      totalPages: Math.max(1, Math.ceil(total / input.pageSize)),
+      items
+    };
+  };
 
   const app = buildApp(
     config,
     () => ({
       stateDir: config.stateDir,
       botCount: state.botsState.bots.length,
-      buyChance: config.runtime.trading.buyChance,
-      sellChance: config.runtime.trading.sellChance,
-      maxAmount: config.runtime.trading.maxAmount,
+      buyChance: state.runtimeConfig.config.trading.buyChance,
+      sellChance: state.runtimeConfig.config.trading.sellChance,
+      maxAmount: state.runtimeConfig.config.trading.maxAmount,
       createdBotsOnStartup: reconciliation.createdBots.length,
       initialFundingScheduled: fundingSchedule.scheduled
     }),
-    buyEngine
-      ? {
-          forceBuy: async (input: { marketIds?: string[] }) =>
+    {
+      forceBuy: buyEngine
+        ? async (input: { marketIds?: string[] }) =>
             buyEngine.runCycle({
               source: "manual",
               marketIds: input.marketIds
             })
-        }
-      : {}
+        : undefined,
+      forceSell: sellEngine
+        ? async (input: { marketIds?: string[] }) =>
+            sellEngine.runCycle({
+              source: "manual",
+              marketIds: input.marketIds
+            })
+        : undefined,
+      addIgnoredMarkets: async (input: { marketIds: string[] }) => addIgnoredMarketIds(input.marketIds),
+      removeIgnoredMarkets: async (input: { marketIds: string[] }) => removeIgnoredMarketIds(input.marketIds),
+      getBotBalances: balanceClient
+        ? async (input: { page: number; pageSize: number }) => getBotBalances(input)
+        : undefined,
+      updateRuntimeConfig: async (patch: RuntimeConfigPatchInput) => updateRuntimeConfig(patch)
+    }
   );
 
   return {
@@ -189,9 +358,20 @@ export async function createInitializedApp(
           start: async () => marketCache.start({ immediate: true }),
           stop: () => marketCache.stop(),
           getSnapshot: () => marketCache.getSnapshot(),
-          setIgnoredMarketIds: (ids: string[]) => marketCache.setIgnoredMarketIds(ids),
-          addIgnoredMarketIds: (ids: string[]) => marketCache.addIgnoredMarketIds(ids),
-          removeIgnoredMarketIds: (ids: string[]) => marketCache.removeIgnoredMarketIds(ids)
+          setIgnoredMarketIds: async (ids: string[]) => {
+            const normalized = normalizeMarketIds(ids);
+            const nextConfig = {
+              ...state.runtimeConfig.config,
+              ignoredMarketIds: normalized
+            };
+            await persistRuntimeConfig(nextConfig);
+            marketCache.setIgnoredMarketIds(normalized);
+            return {
+              ignoredMarketIds: normalized
+            };
+          },
+          addIgnoredMarketIds: async (ids: string[]) => addIgnoredMarketIds(ids),
+          removeIgnoredMarketIds: async (ids: string[]) => removeIgnoredMarketIds(ids)
         }
       : null,
     buy: buyEngine
@@ -204,6 +384,18 @@ export async function createInitializedApp(
           start: async () => buyEngine.start({ immediate: true }),
           stop: () => buyEngine.stop(),
           getSnapshot: () => buyEngine.getSnapshot()
+        }
+      : null,
+    sell: sellEngine
+      ? {
+          runCycle: async (marketIds?: string[]) =>
+            sellEngine.runCycle({
+              source: "manual",
+              marketIds
+            }),
+          start: async () => sellEngine.start({ immediate: true }),
+          stop: () => sellEngine.stop(),
+          getSnapshot: () => sellEngine.getSnapshot()
         }
       : null
   };

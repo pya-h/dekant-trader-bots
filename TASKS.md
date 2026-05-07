@@ -159,7 +159,7 @@ E2E tests:
 Exit criteria:
 - Buy loop produces realistic, bounded, and diverse bot actions.
 
-## Phase 8 - Sell Engine
+## [x] Phase 8 - Sell Engine
 - Implement per-sell-tick sequence:
   - inspect positions
   - compute predicted range
@@ -181,7 +181,7 @@ E2E tests:
 Exit criteria:
 - Sell loop consistently de-risks out-of-range positions without over-selling.
 
-## Phase 9 - Admin API (Core Controls)
+## [x] Phase 9 - Admin API (Core Controls)
 - Implement admin auth middleware (`x-security`).
 - Implement endpoints:
   - ignored markets add/remove

@@ -15,7 +15,10 @@ const positionSchema = z.object({
   marketId: z.string(),
   token: z.string(),
   amount: z.number(),
-  side: z.string().optional()
+  side: z.string().optional(),
+  center: z.number().optional(),
+  entryPrice: z.number().optional(),
+  price: z.number().optional()
 });
 
 const txResultSchema = z.object({
