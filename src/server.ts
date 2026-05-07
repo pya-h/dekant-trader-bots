@@ -496,7 +496,7 @@ export async function createInitializedApp(
       safeInfo(logger, "sell_cycle_completed", {
         source: cycle.source,
         actions: cycle.actions.length,
-        succeeded: cycle.actions.filter((a) => a.status === "submitted").length,
+        succeeded: cycle.actions.filter((a) => a.status === "sold_full" || a.status === "sold_partial").length,
         failed: cycle.actions.filter((a) => a.status === "failed_submit").length
       });
 
