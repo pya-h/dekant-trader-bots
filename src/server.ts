@@ -12,6 +12,7 @@ import { MarketCache } from "./markets/cache.js";
 import { runtimeConfigSchema } from "./state/types.js";
 import { saveRuntimeConfig } from "./storage/runtime-config-store.js";
 import { TradeStatsStore } from "./metrics/trade-stats.js";
+import { classifyError } from "./observability/errors.js";
 import { MonitoredJob, RuntimeMonitor } from "./observability/runtime-monitor.js";
 import {
   BuyEngine,
@@ -32,6 +33,16 @@ dotenv.config({ quiet: true });
 
 type StructuredLogger = {
   error(event: string, fields: Record<string, unknown>): void;
+};
+
+type LoopIntervalProvider = {
+  setInterval(handler: () => void, intervalMs: number): unknown;
+  clearInterval(handle: unknown): void;
+};
+
+const defaultLoopIntervalProvider: LoopIntervalProvider = {
+  setInterval: (handler, intervalMs) => setInterval(handler, intervalMs),
+  clearInterval: (handle) => clearInterval(handle as NodeJS.Timeout)
 };
 
 function makeDefaultLogger(now: () => Date): StructuredLogger {
@@ -63,10 +74,12 @@ export type AppInitializationOptions = {
     faucet: FaucetClient;
     now?: () => Date;
     random?: () => number;
+    timer?: LoopIntervalProvider;
   };
   marketCache?: {
     client: DekantClient;
     refreshIntervalMs?: number;
+    timer?: LoopIntervalProvider;
   };
   buy?: {
     dekant: BuyEngineDekantTradingClient;
@@ -173,43 +186,6 @@ export async function createInitializedApp(
     deps: options.botLifecycleDeps
   });
   state.botsState = reconciliation.updatedState;
-
-  const fundingSchedule = scheduleInitialFundingIfNeeded({
-    hadExistingBots: reconciliation.hadExistingBots,
-    createdBots: reconciliation.createdBots,
-    delayMs: envConfig.intervals.initialFundingDelayMs,
-    timer: options.timer,
-    trigger: async (context) => {
-      runtimeMonitor.recordJobStart("initial_funding");
-      try {
-        await options.onInitialFundingRequested?.({
-          createdBotIds: context.createdBots.map((bot) => bot.id),
-          delayMs: context.delayMs
-        });
-        runtimeMonitor.recordJobSuccess("initial_funding");
-      } catch (error) {
-        trackAndLogFailure({
-          monitor: runtimeMonitor,
-          logger,
-          job: "initial_funding",
-          error,
-          event: "initial_funding_failed",
-          context: {
-            createdBots: context.createdBots.length
-          }
-        });
-      }
-    },
-    onError: (error) => {
-      trackAndLogFailure({
-        monitor: runtimeMonitor,
-        logger,
-        job: "initial_funding",
-        error,
-        event: "initial_funding_unhandled_error"
-      });
-    }
-  });
 
   const config = buildAppConfig(envConfig, state.runtimeConfig);
   const marketCache = options.marketCache
@@ -509,6 +485,232 @@ export async function createInitializedApp(
     }
   };
 
+  const runMarketRefresh = async () => {
+    if (!marketCache) {
+      throw new Error("market_cache_unavailable");
+    }
+
+    runtimeMonitor.recordJobStart("market_refresh");
+    const result = await marketCache.refresh();
+    if (result.updated) {
+      runtimeMonitor.recordJobSuccess("market_refresh");
+    } else {
+      trackAndLogFailure({
+        monitor: runtimeMonitor,
+        logger,
+        job: "market_refresh",
+        error: result.error ?? "market_refresh_failed",
+        event: "market_refresh_failed",
+        context: {
+          cycleType: "market_refresh"
+        }
+      });
+    }
+
+    return result;
+  };
+
+  const runManualFund = async (
+    input: Omit<ManualFundRequest, "bots">,
+    source: "admin" | "service_api" | "add_bots" | "initial_funding"
+  ) => {
+    if (!fundingEngine) {
+      throw new Error("funding_unavailable");
+    }
+
+    runtimeMonitor.recordJobStart("manual_fund");
+    try {
+      const result = await fundingEngine.manualFund({
+        bots: state.botsState.bots,
+        ...input
+      });
+      runtimeMonitor.recordJobSuccess("manual_fund");
+      return result;
+    } catch (error) {
+      trackAndLogFailure({
+        monitor: runtimeMonitor,
+        logger,
+        job: "manual_fund",
+        error,
+        event: "manual_fund_failed",
+        context: {
+          source
+        }
+      });
+      throw error;
+    }
+  };
+
+  const runPrefundCycle = async (source: "scheduled" | "service_api" = "scheduled") => {
+    if (!fundingEngine) {
+      throw new Error("funding_unavailable");
+    }
+
+    runtimeMonitor.recordJobStart("manual_fund");
+    try {
+      const result = await fundingEngine.prefundBots(state.botsState.bots);
+      runtimeMonitor.recordJobSuccess("manual_fund");
+      return result;
+    } catch (error) {
+      trackAndLogFailure({
+        monitor: runtimeMonitor,
+        logger,
+        job: "manual_fund",
+        error,
+        event: "prefund_failed",
+        context: {
+          source
+        }
+      });
+      throw error;
+    }
+  };
+
+  const fundingSchedule = scheduleInitialFundingIfNeeded({
+    hadExistingBots: reconciliation.hadExistingBots,
+    createdBots: reconciliation.createdBots,
+    delayMs: envConfig.intervals.initialFundingDelayMs,
+    timer: options.timer,
+    trigger: async (context) => {
+      runtimeMonitor.recordJobStart("initial_funding");
+      try {
+        if (options.onInitialFundingRequested) {
+          await options.onInitialFundingRequested({
+            createdBotIds: context.createdBots.map((bot) => bot.id),
+            delayMs: context.delayMs
+          });
+        } else if (fundingEngine) {
+          await runManualFund(
+            {
+              botIds: context.createdBots.map((bot) => bot.id)
+            },
+            "initial_funding"
+          );
+        }
+
+        runtimeMonitor.recordJobSuccess("initial_funding");
+      } catch (error) {
+        trackAndLogFailure({
+          monitor: runtimeMonitor,
+          logger,
+          job: "initial_funding",
+          error,
+          event: "initial_funding_failed",
+          context: {
+            createdBots: context.createdBots.length
+          }
+        });
+      }
+    },
+    onError: (error) => {
+      trackAndLogFailure({
+        monitor: runtimeMonitor,
+        logger,
+        job: "initial_funding",
+        error,
+        event: "initial_funding_unhandled_error"
+      });
+    }
+  });
+
+  const marketLoopTimer = options.marketCache?.timer ?? defaultLoopIntervalProvider;
+  const buyLoopTimer = options.buy?.timer ?? defaultLoopIntervalProvider;
+  const sellLoopTimer = options.sell?.timer ?? defaultLoopIntervalProvider;
+  const fundingLoopTimer = options.funding?.timer ?? defaultLoopIntervalProvider;
+
+  let marketLoopHandle: unknown = null;
+  let buyLoopHandle: unknown = null;
+  let sellLoopHandle: unknown = null;
+  let fundingLoopHandle: unknown = null;
+
+  const startMarketLoop = async (options: { immediate?: boolean } = {}) => {
+    if (!marketCache || marketLoopHandle !== null) {
+      return;
+    }
+
+    if (options.immediate !== false) {
+      await runMarketRefresh().catch(() => {});
+    }
+
+    marketLoopHandle = marketLoopTimer.setInterval(() => {
+      void runMarketRefresh().catch(() => {});
+    }, config.intervals.marketRefreshMs);
+  };
+
+  const stopMarketLoop = () => {
+    if (marketLoopHandle === null) {
+      return;
+    }
+    marketLoopTimer.clearInterval(marketLoopHandle);
+    marketLoopHandle = null;
+  };
+
+  const startBuyLoop = async (options: { immediate?: boolean } = {}) => {
+    if (!buyEngine || buyLoopHandle !== null) {
+      return;
+    }
+
+    if (options.immediate !== false) {
+      await runBuyCycle({ source: "scheduled" }).catch(() => {});
+    }
+
+    buyLoopHandle = buyLoopTimer.setInterval(() => {
+      void runBuyCycle({ source: "scheduled" }).catch(() => {});
+    }, config.intervals.buyMs);
+  };
+
+  const stopBuyLoop = () => {
+    if (buyLoopHandle === null) {
+      return;
+    }
+    buyLoopTimer.clearInterval(buyLoopHandle);
+    buyLoopHandle = null;
+  };
+
+  const startSellLoop = async (options: { immediate?: boolean } = {}) => {
+    if (!sellEngine || sellLoopHandle !== null) {
+      return;
+    }
+
+    if (options.immediate !== false) {
+      await runSellCycle({ source: "scheduled" }).catch(() => {});
+    }
+
+    sellLoopHandle = sellLoopTimer.setInterval(() => {
+      void runSellCycle({ source: "scheduled" }).catch(() => {});
+    }, config.intervals.sellMs);
+  };
+
+  const stopSellLoop = () => {
+    if (sellLoopHandle === null) {
+      return;
+    }
+    sellLoopTimer.clearInterval(sellLoopHandle);
+    sellLoopHandle = null;
+  };
+
+  const startFundingLoop = async (options: { immediate?: boolean } = {}) => {
+    if (!fundingEngine || fundingLoopHandle !== null) {
+      return;
+    }
+
+    if (options.immediate === true) {
+      await runPrefundCycle("scheduled").catch(() => {});
+    }
+
+    fundingLoopHandle = fundingLoopTimer.setInterval(() => {
+      void runPrefundCycle("scheduled").catch(() => {});
+    }, config.intervals.fundingMs);
+  };
+
+  const stopFundingLoop = () => {
+    if (fundingLoopHandle === null) {
+      return;
+    }
+    fundingLoopTimer.clearInterval(fundingLoopHandle);
+    fundingLoopHandle = null;
+  };
+
   const addBotsWithReadiness = async (count: number) => {
     runtimeMonitor.recordJobStart("add_bots");
 
@@ -526,24 +728,15 @@ export async function createInitializedApp(
       let fundingError: { type: string; message: string } | null = null;
 
       if (fundingEngine && result.addedBots.length > 0) {
-        runtimeMonitor.recordJobStart("manual_fund");
         try {
-          funding = await fundingEngine.manualFund({
-            bots: state.botsState.bots,
-            botIds: result.addedBots.map((bot) => bot.id)
-          });
-          runtimeMonitor.recordJobSuccess("manual_fund");
+          funding = await runManualFund(
+            {
+              botIds: result.addedBots.map((bot) => bot.id)
+            },
+            "add_bots"
+          );
         } catch (error) {
-          const classified = trackAndLogFailure({
-            monitor: runtimeMonitor,
-            logger,
-            job: "manual_fund",
-            error,
-            event: "manual_fund_failed",
-            context: {
-              source: "add_bots"
-            }
-          });
+          const classified = classifyError(error);
           fundingError = {
             type: classified.type,
             message: classified.message
@@ -605,32 +798,16 @@ export async function createInitializedApp(
         }),
       addBots: async (input: { count: number }) => addBotsWithReadiness(input.count),
       manualFund: fundingEngine
-        ? async (input: { botIds?: string[]; addresses?: string[]; amount?: number; token?: string }) => {
-            runtimeMonitor.recordJobStart("manual_fund");
-            try {
-              const result = await fundingEngine.manualFund({
-                bots: state.botsState.bots,
+        ? async (input: { botIds?: string[]; addresses?: string[]; amount?: number; token?: string }) =>
+            runManualFund(
+              {
                 botIds: input.botIds,
                 addresses: input.addresses,
                 amount: input.amount,
                 token: input.token
-              });
-              runtimeMonitor.recordJobSuccess("manual_fund");
-              return result;
-            } catch (error) {
-              trackAndLogFailure({
-                monitor: runtimeMonitor,
-                logger,
-                job: "manual_fund",
-                error,
-                event: "manual_fund_failed",
-                context: {
-                  source: "admin"
-                }
-              });
-              throw error;
-            }
-          }
+              },
+              "admin"
+            )
         : undefined,
       addIgnoredMarkets: async (input: { marketIds: string[] }) => addIgnoredMarketIds(input.marketIds),
       removeIgnoredMarkets: async (input: { marketIds: string[] }) => removeIgnoredMarketIds(input.marketIds),
@@ -640,6 +817,14 @@ export async function createInitializedApp(
       updateRuntimeConfig: async (patch: RuntimeConfigPatchInput) => updateRuntimeConfig(patch)
     }
   );
+
+  app.addHook("onClose", async () => {
+    stopBuyLoop();
+    stopSellLoop();
+    stopMarketLoop();
+    stopFundingLoop();
+    fundingSchedule.cancel();
+  });
 
   return {
     app,
@@ -662,46 +847,15 @@ export async function createInitializedApp(
     },
     funding: fundingEngine
       ? {
-          manualFund: async (request: Omit<ManualFundRequest, "bots"> = {}) => {
-            runtimeMonitor.recordJobStart("manual_fund");
-            try {
-              const result = await fundingEngine.manualFund({
-                bots: state.botsState.bots,
-                ...request
-              });
-              runtimeMonitor.recordJobSuccess("manual_fund");
-              return result;
-            } catch (error) {
-              trackAndLogFailure({
-                monitor: runtimeMonitor,
-                logger,
-                job: "manual_fund",
-                error,
-                event: "manual_fund_failed",
-                context: {
-                  source: "service_api"
-                }
-              });
-              throw error;
-            }
-          },
-          prefund: async () => {
-            runtimeMonitor.recordJobStart("manual_fund");
-            try {
-              const result = await fundingEngine.prefundBots(state.botsState.bots);
-              runtimeMonitor.recordJobSuccess("manual_fund");
-              return result;
-            } catch (error) {
-              trackAndLogFailure({
-                monitor: runtimeMonitor,
-                logger,
-                job: "manual_fund",
-                error,
-                event: "prefund_failed"
-              });
-              throw error;
-            }
-          },
+          manualFund: async (request: Omit<ManualFundRequest, "bots"> = {}) =>
+            runManualFund(request, "service_api"),
+          prefund: async () => runPrefundCycle("service_api"),
+          start: async (options: { immediate?: boolean } = {}) => startFundingLoop(options),
+          stop: () => stopFundingLoop(),
+          getSnapshot: () => ({
+            isRunning: fundingLoopHandle !== null,
+            intervalMs: config.intervals.fundingMs
+          }),
           emergencyTopup: async (input: { botId: string; token: string; amount?: number }) => {
             const bot = state.botsState.bots.find((candidate) => candidate.id === input.botId);
             if (!bot) {
@@ -736,29 +890,13 @@ export async function createInitializedApp(
       : null,
     markets: marketCache
       ? {
-          refresh: async () => {
-            runtimeMonitor.recordJobStart("market_refresh");
-            const result = await marketCache.refresh();
-            if (result.updated) {
-              runtimeMonitor.recordJobSuccess("market_refresh");
-            } else {
-              trackAndLogFailure({
-                monitor: runtimeMonitor,
-                logger,
-                job: "market_refresh",
-                error: result.error ?? "market_refresh_failed",
-                event: "market_refresh_failed",
-                context: {
-                  cycleType: "market_refresh"
-                }
-              });
-            }
-
-            return result;
-          },
-          start: async () => marketCache.start({ immediate: true }),
-          stop: () => marketCache.stop(),
-          getSnapshot: () => marketCache.getSnapshot(),
+          refresh: async () => runMarketRefresh(),
+          start: async (options: { immediate?: boolean } = {}) => startMarketLoop(options),
+          stop: () => stopMarketLoop(),
+          getSnapshot: () => ({
+            ...marketCache.getSnapshot(),
+            isRunning: marketLoopHandle !== null
+          }),
           setIgnoredMarketIds: async (ids: string[]) => {
             const normalized = normalizeMarketIds(ids);
             const nextConfig = {
@@ -782,9 +920,12 @@ export async function createInitializedApp(
               source: "manual",
               marketIds
             }),
-          start: async () => buyEngine.start({ immediate: true }),
-          stop: () => buyEngine.stop(),
-          getSnapshot: () => buyEngine.getSnapshot()
+          start: async (options: { immediate?: boolean } = {}) => startBuyLoop(options),
+          stop: () => stopBuyLoop(),
+          getSnapshot: () => ({
+            ...buyEngine.getSnapshot(),
+            isRunning: buyLoopHandle !== null
+          })
         }
       : null,
     sell: sellEngine
@@ -794,18 +935,27 @@ export async function createInitializedApp(
               source: "manual",
               marketIds
             }),
-          start: async () => sellEngine.start({ immediate: true }),
-          stop: () => sellEngine.stop(),
-          getSnapshot: () => sellEngine.getSnapshot()
+          start: async (options: { immediate?: boolean } = {}) => startSellLoop(options),
+          stop: () => stopSellLoop(),
+          getSnapshot: () => ({
+            ...sellEngine.getSnapshot(),
+            isRunning: sellLoopHandle !== null
+          })
         }
       : null
   };
 }
 
 async function start(): Promise<void> {
-  const { app, config } = await createInitializedApp(process.env);
+  const appCtx = await createInitializedApp(process.env);
+  const { app, config } = appCtx;
 
   await app.listen({ host: config.host, port: config.port });
+
+  await appCtx.markets?.start({ immediate: true });
+  await appCtx.buy?.start({ immediate: true });
+  await appCtx.sell?.start({ immediate: true });
+  await appCtx.funding?.start({ immediate: false });
 }
 
 function isMainModule(): boolean {

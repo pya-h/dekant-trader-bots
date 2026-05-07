@@ -7,6 +7,7 @@ import { createInitializedApp } from "../../src/server.js";
 import { DekantClient, DekantMarket } from "../../src/clients/dekant-client.js";
 import { MarketPriceResolution, PriceQuote } from "../../src/clients/price-client.js";
 import { createBaseEnv } from "../helpers/config.js";
+import { createCapturedLogger } from "../helpers/observability.js";
 
 const tempRoots: string[] = [];
 
@@ -43,6 +44,7 @@ describe("fault tolerance", () => {
     };
 
     let priceCalls = 0;
+    const capturedLogger = createCapturedLogger();
     const priceClient = {
       resolveMarketPrices: async (): Promise<MarketPriceResolution> => {
         priceCalls += 1;
@@ -91,6 +93,9 @@ describe("fault tolerance", () => {
         dekant: dekantClient,
         price: priceClient,
         random: () => 0.5
+      },
+      observability: {
+        logger: capturedLogger.logger
       }
     });
 
@@ -112,6 +117,15 @@ describe("fault tolerance", () => {
     expect(degradedStatus.body.status).toBe("degraded");
     expect(degradedStatus.body.runtime.observability.health).toBe("degraded");
     expect(degradedStatus.body.runtime.observability.totals.jobFailures).toBeGreaterThanOrEqual(1);
+    expect(capturedLogger.getByEvent("buy_cycle_failed")).toHaveLength(1);
+    expect(capturedLogger.getByEvent("buy_cycle_failed")[0].fields).toMatchObject({
+      errorType: "network",
+      known: true,
+      retryable: true,
+      message: "price_service_down",
+      source: "manual",
+      cycleType: "buy"
+    });
 
     const recoveredBuy = await request(appCtx.app.server)
       .post("/admin/bots/buy")
@@ -120,6 +134,7 @@ describe("fault tolerance", () => {
 
     expect(recoveredBuy.status).toBe(200);
     expect(recoveredBuy.body.cycle.submittedCount).toBe(2);
+    expect(capturedLogger.entries).toHaveLength(1);
 
     await appCtx.app.close();
   });

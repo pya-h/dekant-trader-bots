@@ -8,6 +8,7 @@ import { DekantClient, DekantMarket, DekantPosition, SubmitTradeRequest } from "
 import { MarketPriceResolution, PriceQuote } from "../../src/clients/price-client.js";
 import { BotRecord } from "../../src/state/types.js";
 import { createBaseEnv } from "../helpers/config.js";
+import { createCapturedLogger } from "../helpers/observability.js";
 
 const tempRoots: string[] = [];
 
@@ -281,6 +282,7 @@ describe("full system e2e", () => {
       balancesByAddress,
       faucetSupportedTokens: ["DOGE"]
     });
+    const capturedLogger = createCapturedLogger();
 
     const buyInterval = createIntervalHarness();
     const sellInterval = createIntervalHarness();
@@ -305,7 +307,10 @@ describe("full system e2e", () => {
         random: () => 0.95,
         timer: sellInterval.timer
       },
-      funding: fundingHarness.funding
+      funding: fundingHarness.funding,
+      observability: {
+        logger: capturedLogger.logger
+      }
     });
 
     await appCtx.app.ready();
@@ -362,9 +367,13 @@ describe("full system e2e", () => {
 
     expect(status.status).toBe(200);
     expect(status.body.status).toBe("ok");
+    expect(status.body.runtime.observability.health).toBe("ok");
+    expect(status.body.runtime.observability.totals.jobFailures).toBe(0);
+    expect(status.body.runtime.observability.totals.actionFailures).toBe(0);
 
     expect(dekant.submitBuyCalls.length).toBeGreaterThan(0);
     expect(dekant.submitSellCalls.length).toBeGreaterThan(0);
+    expect(capturedLogger.entries).toHaveLength(0);
 
     await appCtx.buy!.stop();
     await appCtx.sell!.stop();
@@ -401,6 +410,7 @@ describe("full system e2e", () => {
       failEverySell: 5
     });
     const priceClient = createPriceClient({ BTC: 95_000, ETH: 2_700, SOL: 160, AVAX: 42, XRP: 1.2, DOGE: 0.2 });
+    const capturedLogger = createCapturedLogger();
 
     const appCtx = await createInitializedApp(env, {
       timer: {
@@ -419,6 +429,9 @@ describe("full system e2e", () => {
         dekant: dekant.dekantClient,
         price: priceClient,
         random: () => 0.95
+      },
+      observability: {
+        logger: capturedLogger.logger
       }
     });
 
@@ -449,6 +462,15 @@ describe("full system e2e", () => {
 
     expect(status.status).toBe(200);
     expect(status.body.status).toBe("degraded");
+    expect(status.body.runtime.observability.totals.jobFailures).toBe(0);
+    expect(status.body.runtime.observability.totals.actionFailures).toBe(
+      buyAll.body.cycle.failedSubmitCount + sellScoped.body.cycle.failedSubmitCount
+    );
+
+    const errorEvents = capturedLogger.getEvents();
+    expect(capturedLogger.getByEvent("buy_action_failed")).toHaveLength(buyAll.body.cycle.failedSubmitCount);
+    expect(capturedLogger.getByEvent("sell_action_failed")).toHaveLength(sellScoped.body.cycle.failedSubmitCount);
+    expect(errorEvents.every((event) => event === "buy_action_failed" || event === "sell_action_failed")).toBe(true);
 
     const health = await request(appCtx.app.server).get("/health");
     expect(health.status).toBe(200);
