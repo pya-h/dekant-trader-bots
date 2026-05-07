@@ -1,7 +1,18 @@
 import Fastify, { FastifyInstance } from "fastify";
 import { AppConfig } from "./config.js";
 
-export function buildApp(config: AppConfig): FastifyInstance {
+type StatusRuntimeSnapshot = {
+  stateDir: string;
+  botCount: number;
+  buyChance: number;
+  sellChance: number;
+  maxAmount: number;
+};
+
+export function buildApp(
+  config: AppConfig,
+  runtimeSnapshot?: StatusRuntimeSnapshot
+): FastifyInstance {
   const app = Fastify({ logger: false });
 
   app.get("/health", async () => {
@@ -18,7 +29,11 @@ export function buildApp(config: AppConfig): FastifyInstance {
       });
 
       adminScope.get("/status", async () => {
-        return { status: "ok", service: "dekant-trader-bots" };
+        return {
+          status: "ok",
+          service: "dekant-trader-bots",
+          runtime: runtimeSnapshot ?? null
+        };
       });
     },
     { prefix: "/admin" }

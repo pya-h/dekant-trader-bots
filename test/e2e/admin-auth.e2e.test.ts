@@ -1,14 +1,9 @@
 import request from "supertest";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { buildApp } from "../../src/app.js";
-import type { AppConfig } from "../../src/config.js";
+import { createTestAppConfig } from "../helpers/config.js";
 
-const testConfig: AppConfig = {
-  nodeEnv: "test",
-  host: "127.0.0.1",
-  port: 0,
-  adminSecret: "test-secret"
-};
+const testConfig = createTestAppConfig();
 
 describe("admin auth", () => {
   const app = buildApp(testConfig);
@@ -34,6 +29,10 @@ describe("admin auth", () => {
       .set("x-security", testConfig.adminSecret);
 
     expect(response.status).toBe(200);
-    expect(response.body).toEqual({ status: "ok", service: "dekant-trader-bots" });
+    expect(response.body).toEqual({
+      status: "ok",
+      service: "dekant-trader-bots",
+      runtime: null
+    });
   });
 });

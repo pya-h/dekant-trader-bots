@@ -1,13 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { buildApp } from "../../src/app.js";
-import type { AppConfig } from "../../src/config.js";
+import { createTestAppConfig } from "../helpers/config.js";
 
-const testConfig: AppConfig = {
-  nodeEnv: "test",
-  host: "127.0.0.1",
-  port: 0,
-  adminSecret: "test-secret"
-};
+const testConfig = createTestAppConfig();
 
 describe("buildApp", () => {
   it("boots and closes cleanly", async () => {

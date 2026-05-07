@@ -6,3 +6,5 @@ coverage/
 *.log
 state/*.json
 !state/.gitkeep
+docs/*
+docs

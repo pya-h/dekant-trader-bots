@@ -7,6 +7,8 @@ This plan is phase-based and test-first. We only move to the next phase when cur
 - Keep intervals immutable at runtime (from `.env`), mutable knobs in JSON runtime config.
 - Never let worker errors crash the process; failures are isolated, logged, and skipped.
 - Every endpoint that returns large arrays must support optional pagination.
+- Stack decision for this roadmap is fixed: Node.js + TypeScript + Fastify.
+- Elysia refactor is explicitly out-of-scope for current phases; it is only a possible future optimization.
 
 ## Suggested Tooling (Node + TS)
 - Runtime and server: Node.js + TypeScript + Fastify.
@@ -15,7 +17,7 @@ This plan is phase-based and test-first. We only move to the next phase when cur
 - Contract/schema validation: Zod.
 - HTTP mocking for external services: Nock or MSW (node mode).
 
-## Phase 1 - Project Bootstrap and Test Harness
+## [x] Phase 1 - Project Bootstrap and Test Harness
 - Create project skeleton (`src`, `test/unit`, `test/e2e`, `state`, `docs`).
 - Initialize Node + TypeScript + Fastify setup.
 - Add lint/format/typecheck scripts.
@@ -33,7 +35,7 @@ E2E tests:
 Exit criteria:
 - `npm run typecheck`, unit tests, and e2e tests all pass.
 
-## Phase 2 - Config System and Persistence Core
+## [x] Phase 2 - Config System and Persistence Core
 - Implement `.env` parser/validator for required keys.
 - Implement runtime config JSON lifecycle:
   - first run reads `.env`, creates `state/runtime-config.json`.
