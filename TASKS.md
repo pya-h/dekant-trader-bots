@@ -246,7 +246,7 @@ E2E tests:
 Exit criteria:
 - App is resilient under partial outages and bad responses.
 
-## Phase 12 - Full System E2E and Release Readiness
+## [x] Phase 12 - Full System E2E and Release Readiness
 - Build comprehensive scenario suite using mocked integrations.
 - Validate end-to-end flows:
   - startup bootstrap
