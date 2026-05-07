@@ -40,4 +40,40 @@ describe("buildApp", () => {
 
     await app.close();
   });
+
+  it("rejects invalid add-bots and fund payloads", async () => {
+    const app = buildApp(testConfig, undefined, {
+      addBots: async () => ({}),
+      manualFund: async () => ({})
+    });
+
+    await app.ready();
+
+    const addResponse = await app.inject({
+      method: "POST",
+      url: "/admin/bots/add",
+      headers: {
+        "x-security": testConfig.adminSecret
+      },
+      payload: {
+        count: 0
+      }
+    });
+
+    const fundResponse = await app.inject({
+      method: "POST",
+      url: "/admin/bots/fund",
+      headers: {
+        "x-security": testConfig.adminSecret
+      },
+      payload: {
+        amount: -10
+      }
+    });
+
+    expect(addResponse.statusCode).toBe(400);
+    expect(fundResponse.statusCode).toBe(400);
+
+    await app.close();
+  });
 });

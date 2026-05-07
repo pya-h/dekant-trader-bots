@@ -203,7 +203,7 @@ E2E tests:
 Exit criteria:
 - Admin control surface is secure enough for v1 and persistence-correct.
 
-## Phase 10 - Admin API (Operations and Stats)
+## [x] Phase 10 - Admin API (Operations and Stats)
 - Implement endpoints:
   - stats summary
   - add bots
@@ -228,7 +228,7 @@ E2E tests:
 Exit criteria:
 - Ops endpoints are reliable for admin-driven interventions.
 
-## Phase 11 - Fault Tolerance, Observability, and Recovery
+## [x] Phase 11 - Fault Tolerance, Observability, and Recovery
 - Implement known-error classification and retry policy.
 - Add global safety wrappers for scheduler jobs (never crash process).
 - Add structured logging with context: bot ID, market ID, token, cycle type, error type.

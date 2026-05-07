@@ -11,6 +11,10 @@ type StatusRuntimeSnapshot = {
   maxAmount: number;
   createdBotsOnStartup: number;
   initialFundingScheduled: boolean;
+  observability?: {
+    health?: string;
+    [key: string]: unknown;
+  };
 };
 
 type RuntimeSnapshotInput = StatusRuntimeSnapshot | (() => StatusRuntimeSnapshot | null);
@@ -23,9 +27,27 @@ type BotBalancesPage = {
   items: unknown[];
 };
 
+type StatsPage = {
+  page: number;
+  pageSize: number;
+  totalBots: number;
+  totalPages: number;
+  global: Record<string, unknown>;
+  items: unknown[];
+  generatedAt: string;
+};
+
 type AdminHandlers = {
   forceBuy?: (input: { marketIds?: string[] }) => Promise<unknown>;
   forceSell?: (input: { marketIds?: string[] }) => Promise<unknown>;
+  addBots?: (input: { count: number }) => Promise<unknown>;
+  manualFund?: (input: {
+    botIds?: string[];
+    addresses?: string[];
+    amount?: number;
+    token?: string;
+  }) => Promise<unknown>;
+  getStats?: (input: { page: number; pageSize: number }) => Promise<StatsPage>;
   addIgnoredMarkets?: (input: { marketIds: string[] }) => Promise<unknown>;
   removeIgnoredMarkets?: (input: { marketIds: string[] }) => Promise<unknown>;
   getBotBalances?: (input: { page: number; pageSize: number }) => Promise<BotBalancesPage>;
@@ -73,6 +95,21 @@ const runtimeConfigPatchSchema = z
   .strict()
   .refine((value) => Object.keys(value).length > 0, { message: "empty_patch" });
 
+const addBotsBodySchema = z
+  .object({
+    count: z.number().int().positive()
+  })
+  .strict();
+
+const manualFundBodySchema = z
+  .object({
+    bot_ids: z.array(z.string()).optional(),
+    addresses: z.array(z.string()).optional(),
+    amount: z.number().positive().optional(),
+    token: z.string().min(1).optional()
+  })
+  .strict();
+
 type RuntimeConfigPatch = z.infer<typeof runtimeConfigPatchSchema>;
 
 export function buildApp(
@@ -107,10 +144,63 @@ export function buildApp(
       });
 
       adminScope.get("/status", async () => {
+        const runtime = resolveRuntimeSnapshot();
+        const status =
+          runtime?.observability?.health === "degraded"
+            ? "degraded"
+            : runtime?.observability?.health === "ok"
+              ? "ok"
+              : "ok";
+
+        return {
+          status,
+          service: "dekant-trader-bots",
+          runtime
+        };
+      });
+
+      adminScope.get("/stats", async (request, reply) => {
+        if (!adminHandlers.getStats) {
+          return reply.code(503).send({ error: "stats_unavailable" });
+        }
+
+        try {
+          const pagination = parsePaginationQuery(request.query as { page?: unknown; page_size?: unknown });
+          const data = await adminHandlers.getStats({
+            page: pagination.page,
+            pageSize: pagination.pageSize
+          });
+
+          return {
+            status: "ok",
+            ...data
+          };
+        } catch (error) {
+          if (error instanceof Error && error.message.startsWith("invalid_")) {
+            return reply.code(400).send({ error: error.message });
+          }
+
+          throw error;
+        }
+      });
+
+      adminScope.post("/bots/add", async (request, reply) => {
+        if (!adminHandlers.addBots) {
+          return reply.code(503).send({ error: "bot_lifecycle_unavailable" });
+        }
+
+        const parsed = addBotsBodySchema.safeParse(request.body ?? {});
+        if (!parsed.success) {
+          return reply.code(400).send({ error: "invalid_payload" });
+        }
+
+        const result = await adminHandlers.addBots({
+          count: parsed.data.count
+        });
+
         return {
           status: "ok",
-          service: "dekant-trader-bots",
-          runtime: resolveRuntimeSnapshot()
+          result
         };
       });
 
@@ -217,6 +307,29 @@ export function buildApp(
 
           throw error;
         }
+      });
+
+      adminScope.post("/bots/fund", async (request, reply) => {
+        if (!adminHandlers.manualFund) {
+          return reply.code(503).send({ error: "funding_unavailable" });
+        }
+
+        const parsed = manualFundBodySchema.safeParse(request.body ?? {});
+        if (!parsed.success) {
+          return reply.code(400).send({ error: "invalid_payload" });
+        }
+
+        const result = await adminHandlers.manualFund({
+          botIds: parsed.data.bot_ids,
+          addresses: parsed.data.addresses,
+          amount: parsed.data.amount,
+          token: parsed.data.token
+        });
+
+        return {
+          status: "ok",
+          result
+        };
       });
 
       adminScope.patch("/config", async (request, reply) => {

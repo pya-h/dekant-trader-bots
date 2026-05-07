@@ -1,0 +1,126 @@
+import { promises as fs } from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import request from "supertest";
+import { afterEach, describe, expect, it } from "vitest";
+import { createInitializedApp } from "../../src/server.js";
+import { DekantClient, DekantMarket } from "../../src/clients/dekant-client.js";
+import { MarketPriceResolution, PriceQuote } from "../../src/clients/price-client.js";
+import { createBaseEnv } from "../helpers/config.js";
+
+const tempRoots: string[] = [];
+
+async function createTempDir(): Promise<string> {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "dtb-fault-tolerance-e2e-"));
+  tempRoots.push(dir);
+  return dir;
+}
+
+afterEach(async () => {
+  await Promise.all(tempRoots.map((dir) => fs.rm(dir, { recursive: true, force: true })));
+  tempRoots.length = 0;
+});
+
+describe("fault tolerance", () => {
+  it("keeps running and reports degraded health when upstream dependencies fail", async () => {
+    const tempRoot = await createTempDir();
+    const stateDir = path.join(tempRoot, "state");
+    const env = createBaseEnv({
+      STATE_DIR: stateDir,
+      BOT_COUNTS: "2",
+      BUY_CHANCE: "100",
+      MAX_AMOUNT: "30"
+    });
+
+    const markets: DekantMarket[] = [{ id: "m1", subject: "BTC", category: "crypto", status: "open" }];
+
+    const dekantClient: DekantClient = {
+      fetchMarkets: async () => markets,
+      fetchPositions: async () => [],
+      submitBuyOrder: async () => ({ txId: "buy-ok" }),
+      submitSellOrder: async () => ({ txId: "sell-ok" }),
+      prepareBotUser: async () => ({ userId: "u1", publicKey: "p1" })
+    };
+
+    let priceCalls = 0;
+    const priceClient = {
+      resolveMarketPrices: async (): Promise<MarketPriceResolution> => {
+        priceCalls += 1;
+
+        if (priceCalls === 1) {
+          throw new TypeError("price_service_down");
+        }
+
+        const quote: PriceQuote = {
+          tokenId: "BTC",
+          price: 95_000,
+          emaPrice: 95_100,
+          confidence: 0.001,
+          timestamp: "2026-01-01T00:00:00.000Z",
+          stale: false
+        };
+
+        return {
+          byMarketId: new Map([
+            [
+              "m1",
+              {
+                marketId: "m1",
+                token: "BTC",
+                status: "ok",
+                quote
+              }
+            ]
+          ]),
+          quotesByToken: new Map([["BTC", quote]]),
+          missingTokens: [],
+          staleTokens: []
+        };
+      }
+    };
+
+    const appCtx = await createInitializedApp(env, {
+      timer: {
+        setTimeout: () => "handle",
+        clearTimeout: () => {}
+      },
+      marketCache: {
+        client: dekantClient
+      },
+      buy: {
+        dekant: dekantClient,
+        price: priceClient,
+        random: () => 0.5
+      }
+    });
+
+    await appCtx.app.ready();
+    await appCtx.markets!.refresh();
+
+    const failedBuy = await request(appCtx.app.server)
+      .post("/admin/bots/buy")
+      .set("x-security", env.ADMIN_SECRET as string)
+      .send({});
+
+    expect(failedBuy.status).toBe(500);
+
+    const degradedStatus = await request(appCtx.app.server)
+      .get("/admin/status")
+      .set("x-security", env.ADMIN_SECRET as string);
+
+    expect(degradedStatus.status).toBe(200);
+    expect(degradedStatus.body.status).toBe("degraded");
+    expect(degradedStatus.body.runtime.observability.health).toBe("degraded");
+    expect(degradedStatus.body.runtime.observability.totals.jobFailures).toBeGreaterThanOrEqual(1);
+
+    const recoveredBuy = await request(appCtx.app.server)
+      .post("/admin/bots/buy")
+      .set("x-security", env.ADMIN_SECRET as string)
+      .send({});
+
+    expect(recoveredBuy.status).toBe(200);
+    expect(recoveredBuy.body.cycle.submittedCount).toBe(2);
+
+    await appCtx.app.close();
+  });
+});

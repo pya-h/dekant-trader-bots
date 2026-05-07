@@ -128,6 +128,11 @@ export type SellEngineIntervalProvider = {
   clearInterval(handle: unknown): void;
 };
 
+export type SellEngineCycleErrorContext = {
+  source: SellCycleSource;
+  stage: "immediate" | "interval";
+};
+
 const defaultIntervalProvider: SellEngineIntervalProvider = {
   setInterval: (handler, intervalMs) => setInterval(handler, intervalMs),
   clearInterval: (handle) => clearInterval(handle as NodeJS.Timeout)
@@ -144,6 +149,10 @@ export class SellEngine {
   private readonly random: () => number;
   private readonly now: () => Date;
   private readonly timer: SellEngineIntervalProvider;
+  private readonly onCycleError?: (
+    error: unknown,
+    context: SellEngineCycleErrorContext
+  ) => void | Promise<void>;
 
   private intervalHandle: unknown = null;
   private running = false;
@@ -165,6 +174,7 @@ export class SellEngine {
     random?: () => number;
     now?: () => Date;
     timer?: SellEngineIntervalProvider;
+    onCycleError?: (error: unknown, context: SellEngineCycleErrorContext) => void | Promise<void>;
   }) {
     this.sellChance = options.runtime.sellChance;
     this.intervalMs = options.runtime.intervalMs;
@@ -176,6 +186,22 @@ export class SellEngine {
     this.random = options.random ?? Math.random;
     this.now = options.now ?? (() => new Date());
     this.timer = options.timer ?? defaultIntervalProvider;
+    this.onCycleError = options.onCycleError;
+  }
+
+  private notifyCycleError(error: unknown, context: SellEngineCycleErrorContext): void {
+    if (!this.onCycleError) {
+      return;
+    }
+
+    try {
+      const result = this.onCycleError(error, context);
+      if (result && typeof (result as Promise<void>).catch === "function") {
+        void (result as Promise<void>).catch(() => {});
+      }
+    } catch {
+      // Do not allow logging/error callbacks to crash worker loops.
+    }
   }
 
   private toErrorMessage(error: unknown): string {
@@ -556,11 +582,23 @@ export class SellEngine {
     }
 
     if (options.immediate !== false) {
-      await this.runCycle({ source: "scheduled" });
+      try {
+        await this.runCycle({ source: "scheduled" });
+      } catch (error) {
+        this.notifyCycleError(error, {
+          source: "scheduled",
+          stage: "immediate"
+        });
+      }
     }
 
     this.intervalHandle = this.timer.setInterval(() => {
-      void this.runCycle({ source: "scheduled" });
+      void this.runCycle({ source: "scheduled" }).catch((error) => {
+        this.notifyCycleError(error, {
+          source: "scheduled",
+          stage: "interval"
+        });
+      });
     }, this.intervalMs);
   }
 

@@ -26,6 +26,7 @@ export function scheduleInitialFundingIfNeeded(options: {
   createdBots: BotRecord[];
   delayMs: number;
   trigger: InitialFundingTrigger;
+  onError?: (error: unknown) => void;
   timer?: TimerProvider;
 }): InitialFundingScheduleResult {
   if (options.hadExistingBots || options.createdBots.length === 0) {
@@ -38,10 +39,19 @@ export function scheduleInitialFundingIfNeeded(options: {
 
   const timer = options.timer ?? defaultTimerProvider;
   const handle = timer.setTimeout(() => {
-    void options.trigger({
-      createdBots: options.createdBots,
-      delayMs: options.delayMs
-    });
+    try {
+      const result = options.trigger({
+        createdBots: options.createdBots,
+        delayMs: options.delayMs
+      });
+      if (result && typeof (result as Promise<void>).catch === "function") {
+        void (result as Promise<void>).catch((error) => {
+          options.onError?.(error);
+        });
+      }
+    } catch (error) {
+      options.onError?.(error);
+    }
   }, options.delayMs);
 
   return {
