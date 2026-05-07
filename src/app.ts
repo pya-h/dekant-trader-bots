@@ -150,7 +150,7 @@ export function buildApp(
       logger.error("http_unhandled_error", {
         method: request.method,
         url: request.url,
-        message: error.message,
+        message: error instanceof Error ? error.message : String(error),
         statusCode: reply.statusCode
       });
       reply.send(error);
