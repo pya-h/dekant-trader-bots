@@ -77,7 +77,7 @@ E2E tests:
 Exit criteria:
 - All client adapters are typed, tested, and resilient.
 
-## Phase 4 - Bot Lifecycle and Initial Provisioning
+## [x] Phase 4 - Bot Lifecycle and Initial Provisioning
 - Implement startup bot manager:
   - load existing bots
   - create missing bots to reach `BOT_COUNTS`

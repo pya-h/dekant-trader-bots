@@ -7,6 +7,8 @@ type StatusRuntimeSnapshot = {
   buyChance: number;
   sellChance: number;
   maxAmount: number;
+  createdBotsOnStartup: number;
+  initialFundingScheduled: boolean;
 };
 
 export function buildApp(

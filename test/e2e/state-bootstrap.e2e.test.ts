@@ -20,23 +20,52 @@ afterEach(async () => {
 });
 
 describe("state bootstrap", () => {
-  it("creates state files on first startup", async () => {
+  it("creates state files, creates startup bots, and schedules initial funding on first startup", async () => {
     const tempRoot = await createTempDir();
     const stateDir = path.join(tempRoot, "state");
-    const env = createBaseEnv({ STATE_DIR: stateDir });
+    const env = createBaseEnv({
+      STATE_DIR: stateDir,
+      BOT_COUNTS: "3",
+      INITIAL_FUNDING_DELAY_MS: "7777"
+    });
 
-    const { app, state } = await createInitializedApp(env);
+    let scheduledDelay = -1;
+    let scheduledHandler: (() => void) | null = null;
+    const fundingTriggerCalls: string[][] = [];
+
+    const { app, state, startup } = await createInitializedApp(env, {
+      timer: {
+        setTimeout: (handler, timeoutMs) => {
+          scheduledDelay = timeoutMs;
+          scheduledHandler = handler;
+          return "fake-handle";
+        },
+        clearTimeout: () => {}
+      },
+      onInitialFundingRequested: async (context) => {
+        fundingTriggerCalls.push(context.createdBotIds);
+      }
+    });
     await app.ready();
 
     await fs.access(state.files.runtimeConfigPath);
     await fs.access(state.files.botsStatePath);
+    expect(startup.createdBots).toHaveLength(3);
+    expect(startup.initialFundingScheduled).toBe(true);
+    expect(scheduledDelay).toBe(7777);
 
     const response = await request(app.server)
       .get("/admin/status")
       .set("x-security", env.ADMIN_SECRET as string);
 
     expect(response.status).toBe(200);
-    expect(response.body.runtime.botCount).toBe(0);
+    expect(response.body.runtime.botCount).toBe(3);
+    expect(response.body.runtime.initialFundingScheduled).toBe(true);
+
+    expect(scheduledHandler).toBeTypeOf("function");
+    (scheduledHandler as unknown as () => void)();
+    expect(fundingTriggerCalls).toHaveLength(1);
+    expect(fundingTriggerCalls[0]).toHaveLength(3);
 
     await app.close();
   });
@@ -46,7 +75,12 @@ describe("state bootstrap", () => {
     const stateDir = path.join(tempRoot, "state");
 
     const firstEnv = createBaseEnv({ STATE_DIR: stateDir, BUY_CHANCE: "90" });
-    const first = await createInitializedApp(firstEnv);
+    const first = await createInitializedApp(firstEnv, {
+      timer: {
+        setTimeout: () => "handle",
+        clearTimeout: () => {}
+      }
+    });
     await first.app.ready();
     await first.app.close();
 
@@ -55,7 +89,12 @@ describe("state bootstrap", () => {
     await fs.writeFile(first.state.files.runtimeConfigPath, `${JSON.stringify(runtimeRaw, null, 2)}\n`);
 
     const secondEnv = createBaseEnv({ STATE_DIR: stateDir, BUY_CHANCE: "12" });
-    const second = await createInitializedApp(secondEnv);
+    const second = await createInitializedApp(secondEnv, {
+      timer: {
+        setTimeout: () => "handle",
+        clearTimeout: () => {}
+      }
+    });
     await second.app.ready();
 
     const response = await request(second.app.server)
@@ -64,6 +103,42 @@ describe("state bootstrap", () => {
 
     expect(response.status).toBe(200);
     expect(response.body.runtime.buyChance).toBe(41);
+
+    await second.app.close();
+  });
+
+  it("does not duplicate bots on restart and supports add-bots internal workflow", async () => {
+    const tempRoot = await createTempDir();
+    const stateDir = path.join(tempRoot, "state");
+
+    const firstEnv = createBaseEnv({ STATE_DIR: stateDir, BOT_COUNTS: "2" });
+    const first = await createInitializedApp(firstEnv, {
+      timer: {
+        setTimeout: () => "handle",
+        clearTimeout: () => {}
+      }
+    });
+    await first.app.ready();
+    await first.app.close();
+
+    const second = await createInitializedApp(firstEnv, {
+      timer: {
+        setTimeout: () => "handle",
+        clearTimeout: () => {}
+      }
+    });
+    await second.app.ready();
+
+    expect(second.startup.createdBots).toHaveLength(0);
+    expect(second.state.botsState.bots).toHaveLength(2);
+    expect(second.startup.initialFundingScheduled).toBe(false);
+
+    const added = await second.botLifecycle.addBots(2);
+    expect(added.addedBots).toHaveLength(2);
+    expect(added.totalBotCount).toBe(4);
+
+    const persisted = JSON.parse(await fs.readFile(second.state.files.botsStatePath, "utf8"));
+    expect(persisted.bots).toHaveLength(4);
 
     await second.app.close();
   });

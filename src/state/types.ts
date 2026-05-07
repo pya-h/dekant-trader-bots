@@ -39,6 +39,7 @@ export const botRecordSchema = z.object({
   createdAt: z.string().datetime(),
   lastActiveAt: z.string().datetime().nullable().optional()
 });
+export type BotRecord = z.infer<typeof botRecordSchema>;
 
 export const botsStateFileSchema = z.object({
   version: z.literal(1),
