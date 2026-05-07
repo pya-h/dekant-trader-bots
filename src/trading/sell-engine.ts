@@ -123,7 +123,7 @@ type DekantSellingClient = Pick<DekantClient, "fetchPositions" | "submitSellOrde
 export type SellEnginePriceClient = PriceClientLike;
 export type SellEngineDekantSellingClient = DekantSellingClient;
 
-type SellMarket = Pick<DekantMarket, "id" | "subject" | "deadline">;
+type SellMarket = Pick<DekantMarket, "id" | "subject" | "collateralMint" | "deadline">;
 
 export type SellEngineIntervalProvider = {
   setInterval(handler: () => void, intervalMs: number): unknown;
@@ -392,7 +392,7 @@ export class SellEngine {
           positionsConsidered += 1;
 
           const market = selectedMarketsById.get(position.marketId);
-          const token = normalizeToken(position.token || market?.subject || "");
+          const token = market?.collateralMint ?? position.token ?? "";
           const marketPrice = priceResolution.byMarketId.get(position.marketId);
 
           if (!marketPrice || marketPrice.status === "missing") {
@@ -548,7 +548,7 @@ export class SellEngine {
         }
       }
 
-      const requestedTokenCount = new Set(marketsForPricing.map((market) => normalizeToken(market.subject))).size;
+      const requestedTokenCount = new Set(marketsForPricing.map((market) => market.collateralMint)).size;
 
       const result: SellCycleResult = {
         cycleId: randomUUID(),

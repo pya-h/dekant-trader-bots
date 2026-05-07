@@ -43,8 +43,10 @@ describe("admin core endpoints", () => {
     const env = createBaseEnv();
 
     const markets: DekantMarket[] = [
-      { id: "m1", subject: "BTC", category: "crypto", status: "open" },
-      { id: "m2", subject: "ETH", category: "crypto", status: "open" }
+      { id: "m1", subject: "BTC",
+      collateralMint: "Mint11111111111111111111111111111111111111", category: "crypto", status: "open" },
+      { id: "m2", subject: "ETH",
+      collateralMint: "Mint11111111111111111111111111111111111111", category: "crypto", status: "open" }
     ];
 
     const client = createDekantClient(markets);
@@ -129,12 +131,20 @@ describe("admin core endpoints", () => {
         clearTimeout: () => {}
       },
       funding: {
+        vaultAddress: "Vault11111111111111111111111111111111111111",
         vault: {
           transferToken: async () => ({ txId: "token-tx" }),
           transferSol: async () => ({ txId: "sol-tx" })
         },
         balances: {
           getBotBalance: async (address: string, tokens: string[]) => {
+            if (address === "Vault11111111111111111111111111111111111111") {
+              const tokensMap: Record<string, number> = {};
+              for (const token of tokens) {
+                tokensMap[token] = 1_000_000;
+              }
+              return { sol: 1, tokens: tokensMap };
+            }
             const snapshot = balancesByAddress.get(address) ?? { sol: 0, tokens: {} };
             const selected: Record<string, number> = {};
             for (const token of tokens) {

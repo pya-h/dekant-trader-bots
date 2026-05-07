@@ -42,6 +42,7 @@ function buildFundingHarness(bots: BotRecord[], initialSol = 0, initialTokens: R
   };
 
   const deps: NonNullable<AppInitializationOptions["funding"]> = {
+    vaultAddress: "Vault11111111111111111111111111111111111111",
     vault: {
       transferToken: async (input: { token: string; toAddress: string; amount: number }) => {
         const { token, toAddress, amount } = input;
@@ -64,6 +65,13 @@ function buildFundingHarness(bots: BotRecord[], initialSol = 0, initialTokens: R
     },
     balances: {
       getBotBalance: async (address: string, tokens: string[]) => {
+        if (address === "Vault11111111111111111111111111111111111111") {
+          const tokensMap: Record<string, number> = {};
+          for (const token of tokens) {
+            tokensMap[token] = 1_000_000;
+          }
+          return { sol: 1, tokens: tokensMap };
+        }
         const snapshot = balancesByAddress.get(address) ?? { sol: 0, tokens: {} };
         const selected: Record<string, number> = {};
         for (const token of tokens) {

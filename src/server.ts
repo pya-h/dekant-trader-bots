@@ -71,6 +71,7 @@ export type AppInitializationOptions = {
     vault: VaultClient;
     balances: BalanceClient;
     faucet: FaucetClient;
+    vaultAddress: string;
     now?: () => Date;
     random?: () => number;
     timer?: LoopIntervalProvider;
@@ -106,7 +107,7 @@ type RuntimeConfigPatchInput = {
   funding?: {
     emergencyTopupCooldownMs?: number;
     minBotSol?: number;
-    vaultSupportedTokens?: string[];
+    vaultSupportedMints?: string[];
   };
   price?: {
     stalePricePolicy?: "skip" | "allow";
@@ -119,10 +120,6 @@ function unique(values: string[]): string[] {
 
 function normalizeMarketIds(ids: string[]): string[] {
   return unique(ids.map((id) => id.trim()).filter((id) => id.length > 0));
-}
-
-function normalizeTokens(tokens: string[]): string[] {
-  return unique(tokens.map((token) => token.trim().toUpperCase()).filter((token) => token.length > 0));
 }
 
 function trackAndLogFailure(input: {
@@ -221,15 +218,17 @@ export async function createInitializedApp(
           prefundMultiplier: config.runtime.trading.prefundMultiplier,
           minBotSol: config.runtime.funding.minBotSol,
           emergencyTopupCooldownMs: config.runtime.funding.emergencyTopupCooldownMs,
-          vaultSupportedTokens: config.runtime.funding.vaultSupportedTokens
+          vaultSupportedMints: config.runtime.funding.vaultSupportedMints
         },
         clients: {
           vault: options.funding.vault,
           balances: options.funding.balances,
           faucet: options.funding.faucet
         },
+        vaultAddress: options.funding.vaultAddress,
         now: options.funding.now,
-        random: options.funding.random
+        random: options.funding.random,
+        logger
       })
     : null;
 
@@ -350,9 +349,9 @@ export async function createInitializedApp(
       funding: {
         ...current.funding,
         ...(patch.funding ?? {}),
-        ...(patch.funding?.vaultSupportedTokens
+        ...(patch.funding?.vaultSupportedMints
           ? {
-              vaultSupportedTokens: normalizeTokens(patch.funding.vaultSupportedTokens)
+              vaultSupportedMints: patch.funding.vaultSupportedMints
             }
           : {})
       },
@@ -379,7 +378,7 @@ export async function createInitializedApp(
       prefundMultiplier: nextConfig.trading.prefundMultiplier,
       minBotSol: nextConfig.funding.minBotSol,
       emergencyTopupCooldownMs: nextConfig.funding.emergencyTopupCooldownMs,
-      vaultSupportedTokens: nextConfig.funding.vaultSupportedTokens
+      vaultSupportedMints: nextConfig.funding.vaultSupportedMints
     });
 
     return state.runtimeConfig.config;
@@ -394,7 +393,7 @@ export async function createInitializedApp(
     const total = bots.length;
     const offset = (input.page - 1) * input.pageSize;
     const selected = bots.slice(offset, offset + input.pageSize);
-    const tokens = state.runtimeConfig.config.funding.vaultSupportedTokens;
+    const tokens = state.runtimeConfig.config.funding.vaultSupportedMints;
 
     const items = await Promise.all(
       selected.map(async (bot) => {
@@ -543,6 +542,31 @@ export async function createInitializedApp(
     }
   };
 
+  const syncVaultSupportedMintsFromMarkets = async (
+    markets: { collateralMint?: string }[]
+  ): Promise<void> => {
+    const discovered = unique(
+      markets.map((market) => market.collateralMint).filter((mint): mint is string => Boolean(mint))
+    );
+    const current = state.runtimeConfig.config.funding.vaultSupportedMints;
+    if (discovered.length === current.length && discovered.every((mint) => current.includes(mint))) {
+      return;
+    }
+    const nextConfig = {
+      ...state.runtimeConfig.config,
+      funding: {
+        ...state.runtimeConfig.config.funding,
+        vaultSupportedMints: discovered
+      }
+    };
+    await persistRuntimeConfig(nextConfig);
+    fundingEngine?.updateRuntime({ vaultSupportedMints: discovered });
+    safeInfo(logger, "vault_supported_mints_updated", {
+      mints: discovered,
+      count: discovered.length
+    });
+  };
+
   const runMarketRefresh = async () => {
     if (!marketCache) {
       throw new Error("market_cache_unavailable");
@@ -553,9 +577,11 @@ export async function createInitializedApp(
     const result = await marketCache.refresh();
     if (result.updated) {
       runtimeMonitor.recordJobSuccess("market_refresh");
+      const snapshot = marketCache.getSnapshot();
       safeInfo(logger, "market_refresh_completed", {
-        markets: marketCache.getSnapshot().markets.length
+        markets: snapshot.markets.length
       });
+      await syncVaultSupportedMintsFromMarkets(snapshot.markets);
     } else {
       trackAndLogFailure({
         monitor: runtimeMonitor,
@@ -1097,26 +1123,29 @@ async function start(): Promise<void> {
 
   const connection = new Connection(envConfig.integration.solanaRpcUrl, "confirmed");
   const vaultKeypair = loadKeypairFromSecret(envConfig.vault.secretKey);
+  const vaultAddress = vaultKeypair.publicKey.toBase58();
   startupLogger.info?.("vault_loaded", {
-    publicKey: vaultKeypair.publicKey.toBase58(),
-    rpcUrl: envConfig.integration.solanaRpcUrl,
-    tokenSymbols: Object.keys(envConfig.tokenMints)
+    publicKey: vaultAddress,
+    rpcUrl: envConfig.integration.solanaRpcUrl
   });
 
   const vaultClient = new SolanaVaultClient({
     connection,
-    vaultKeypair,
-    tokenMints: envConfig.tokenMints
+    vaultKeypair
   });
 
   const balanceClient = new SolanaBalanceClient({
-    connection,
-    tokenMints: envConfig.tokenMints
+    connection
   });
 
   const appCtx = await createInitializedApp(process.env, {
     marketCache: { client: dekantClient },
-    funding: { vault: vaultClient, balances: balanceClient, faucet: faucetClient },
+    funding: {
+      vault: vaultClient,
+      balances: balanceClient,
+      faucet: faucetClient,
+      vaultAddress
+    },
     buy: { dekant: dekantClient, price: priceClient },
     sell: { dekant: dekantClient, price: priceClient }
   });

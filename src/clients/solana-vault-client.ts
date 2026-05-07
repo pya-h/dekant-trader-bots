@@ -21,7 +21,6 @@ import type { VaultClient } from "../funding/engine.js";
 export type SolanaVaultClientOptions = {
   connection: Connection;
   vaultKeypair: Keypair;
-  tokenMints: Record<string, string>;
 };
 
 export function loadKeypairFromSecret(raw: string): Keypair {
@@ -40,31 +39,14 @@ export function loadKeypairFromSecret(raw: string): Keypair {
   return Keypair.fromSecretKey(decoded);
 }
 
-function normalizeToken(token: string): string {
-  return token.trim().toUpperCase();
-}
-
 export class SolanaVaultClient implements VaultClient {
   private readonly connection: Connection;
   private readonly vaultKeypair: Keypair;
-  private readonly tokenMints: Record<string, PublicKey>;
   private readonly mintInfoCache = new Map<string, { decimals: number }>();
 
   constructor(options: SolanaVaultClientOptions) {
     this.connection = options.connection;
     this.vaultKeypair = options.vaultKeypair;
-    this.tokenMints = {};
-    for (const [symbol, mint] of Object.entries(options.tokenMints)) {
-      this.tokenMints[normalizeToken(symbol)] = new PublicKey(mint);
-    }
-  }
-
-  private resolveMint(token: string): PublicKey {
-    const mint = this.tokenMints[normalizeToken(token)];
-    if (!mint) {
-      throw new Error(`unsupported_token:${token}`);
-    }
-    return mint;
   }
 
   private async getMintDecimals(mint: PublicKey): Promise<number> {
@@ -101,7 +83,7 @@ export class SolanaVaultClient implements VaultClient {
   }
 
   async transferToken(input: { token: string; toAddress: string; amount: number }): Promise<{ txId: string }> {
-    const mint = this.resolveMint(input.token);
+    const mint = new PublicKey(input.token);
     const decimals = await this.getMintDecimals(mint);
     const baseUnits = BigInt(Math.round(input.amount * 10 ** decimals));
     if (baseUnits <= 0n) {

@@ -14,10 +14,6 @@ export function createTestAppConfig(overrides: Partial<AppConfig> = {}): AppConf
     vault: {
       secretKey: "vault-secret"
     },
-    tokenMints: {
-      USDT: "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB",
-      USDC: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
-    },
     botFleet: {
       initialBotCount: 2
     },
@@ -39,7 +35,7 @@ export function createTestAppConfig(overrides: Partial<AppConfig> = {}): AppConf
       funding: {
         emergencyTopupCooldownMs: 300_000,
         minBotSol: 0.01,
-        vaultSupportedTokens: ["USDT", "USDC"]
+        vaultSupportedMints: ["USDT", "USDC"]
       },
       price: {
         stalePricePolicy: "skip"
@@ -76,7 +72,6 @@ export function createBaseEnv(overrides: NodeJS.ProcessEnv = {}): NodeJS.Process
     PRICESERVICE_URL: "https://prices.example.com",
     SOLANA_RPC_URL: "https://rpc.example.com",
     VAULT_SECRET_KEY: "vault-secret",
-    TOKEN_MINTS: "USDC=EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v,USDT=Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB",
     BOT_COUNTS: "2",
     MARKET_REFRESH_INTERVAL_MS: "3600000",
     BUY_INTERVAL_MS: "1200000",
@@ -89,7 +84,7 @@ export function createBaseEnv(overrides: NodeJS.ProcessEnv = {}): NodeJS.Process
     PREFUND_MULTIPLIER: "10",
     EMERGENCY_TOPUP_COOLDOWN_MS: "300000",
     MIN_BOT_SOL: "0.01",
-    VAULT_SUPPORTED_TOKENS: "USDT,USDC",
+    VAULT_SUPPORTED_MINTS: "USDT,USDC",
     STALE_PRICE_POLICY: "skip",
     PRICE_REQUEST_TIMEOUT_MS: "5000",
     PRICE_RETRY_COUNT: "2",

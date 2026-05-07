@@ -15,7 +15,8 @@ describe("fault tolerance", () => {
       MAX_AMOUNT: "30"
     });
 
-    const markets: DekantMarket[] = [{ id: "m1", subject: "BTC", category: "crypto", status: "open" }];
+    const markets: DekantMarket[] = [{ id: "m1", subject: "BTC",
+      collateralMint: "Mint11111111111111111111111111111111111111", category: "crypto", status: "open" }];
 
     const dekantClient: DekantClient = {
       fetchMarkets: async () => markets,

@@ -81,7 +81,7 @@ const runtimeConfigPatchSchema = z
       .object({
         emergencyTopupCooldownMs: z.number().int().positive().optional(),
         minBotSol: z.number().positive().optional(),
-        vaultSupportedTokens: z.array(z.string().min(1)).optional()
+        vaultSupportedMints: z.array(z.string().min(1)).optional()
       })
       .strict()
       .optional(),

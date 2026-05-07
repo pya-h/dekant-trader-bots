@@ -169,7 +169,7 @@ type DekantTradingClient = Pick<DekantClient, "submitBuyOrder">;
 export type BuyEnginePriceClient = PriceClientLike;
 export type BuyEngineDekantTradingClient = DekantTradingClient;
 
-type BuyMarket = Pick<DekantMarket, "id" | "subject" | "deadline" | "liquidity">;
+type BuyMarket = Pick<DekantMarket, "id" | "subject" | "collateralMint" | "deadline" | "liquidity">;
 
 type BotBuyState = {
   tradeCount: number;
@@ -383,7 +383,7 @@ export class BuyEngine {
       let skippedMissingPriceCount = 0;
       let skippedStalePriceCount = 0;
       let failedSubmitCount = 0;
-      const requestedTokenCount = new Set(selectedMarkets.map((market) => market.subject.trim().toUpperCase())).size;
+      const requestedTokenCount = new Set(selectedMarkets.map((market) => market.collateralMint)).size;
 
       for (const bot of bots) {
         const previous = this.botState.get(bot.id) ?? {
@@ -393,7 +393,7 @@ export class BuyEngine {
 
         for (const market of selectedMarkets) {
           const marketPrice = priceResolution.byMarketId.get(market.id);
-          const token = market.subject.trim().toUpperCase();
+          const token = market.collateralMint;
 
           if (!marketPrice || marketPrice.status === "missing") {
             skippedMissingPriceCount += 1;

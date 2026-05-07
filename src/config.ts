@@ -19,7 +19,6 @@ const envSchema = z.object({
   PRICESERVICE_URL: z.string().url(),
   SOLANA_RPC_URL: z.string().url(),
   VAULT_SECRET_KEY: z.string().min(1),
-  TOKEN_MINTS: z.string().min(1),
   BOT_COUNTS: z.coerce.number().int().positive().default(5),
   MARKET_REFRESH_INTERVAL_MS: z.coerce.number().int().positive().default(3_600_000),
   BUY_INTERVAL_MS: z.coerce.number().int().positive().default(1_200_000),
@@ -32,7 +31,7 @@ const envSchema = z.object({
   PREFUND_MULTIPLIER: z.coerce.number().positive().default(10),
   EMERGENCY_TOPUP_COOLDOWN_MS: z.coerce.number().int().positive().default(300_000),
   MIN_BOT_SOL: z.coerce.number().positive().default(0.01),
-  VAULT_SUPPORTED_TOKENS: z.string().default("USDT,USDC"),
+  VAULT_SUPPORTED_MINTS: z.string().default(""),
   STALE_PRICE_POLICY: z.enum(["skip", "allow"]).default("skip"),
   PRICE_REQUEST_TIMEOUT_MS: z.coerce.number().int().positive().default(5_000),
   PRICE_RETRY_COUNT: z.coerce.number().int().nonnegative().default(2),
@@ -60,7 +59,6 @@ export type EnvConfig = {
   vault: {
     secretKey: string;
   };
-  tokenMints: Record<string, string>;
   botFleet: {
     initialBotCount: number;
   };
@@ -78,7 +76,7 @@ export type EnvConfig = {
     prefundMultiplier: number;
     emergencyTopupCooldownMs: number;
     minBotSol: number;
-    vaultSupportedTokens: string[];
+    vaultSupportedMints: string[];
     stalePricePolicy: "skip" | "allow";
   };
   clientDefaults: {
@@ -113,7 +111,6 @@ export type AppConfig = {
   vault: {
     secretKey: string;
   };
-  tokenMints: Record<string, string>;
   botFleet: {
     initialBotCount: number;
   };
@@ -128,36 +125,13 @@ export type AppConfig = {
   clients: EnvConfig["clientDefaults"];
 };
 
-function parseTokenList(raw: string): string[] {
+function parseMintList(raw: string): string[] {
   return raw
     .split(",")
-    .map((token) => token.trim().toUpperCase())
-    .filter((token) => token.length > 0);
+    .map((entry) => entry.trim())
+    .filter((entry) => entry.length > 0);
 }
 
-function parseTokenMints(raw: string): Record<string, string> {
-  const entries: Record<string, string> = {};
-  for (const part of raw.split(",")) {
-    const trimmed = part.trim();
-    if (!trimmed) {
-      continue;
-    }
-    const eq = trimmed.indexOf("=");
-    if (eq <= 0) {
-      throw new Error(`invalid_token_mint_entry: ${trimmed}`);
-    }
-    const symbol = trimmed.slice(0, eq).trim().toUpperCase();
-    const mint = trimmed.slice(eq + 1).trim();
-    if (!symbol || !mint) {
-      throw new Error(`invalid_token_mint_entry: ${trimmed}`);
-    }
-    entries[symbol] = mint;
-  }
-  if (Object.keys(entries).length === 0) {
-    throw new Error("token_mints_empty");
-  }
-  return entries;
-}
 
 export function loadEnvConfig(env: NodeJS.ProcessEnv = process.env): EnvConfig {
   const parsed = envSchema.parse(env);
@@ -177,7 +151,6 @@ export function loadEnvConfig(env: NodeJS.ProcessEnv = process.env): EnvConfig {
     vault: {
       secretKey: parsed.VAULT_SECRET_KEY
     },
-    tokenMints: parseTokenMints(parsed.TOKEN_MINTS),
     botFleet: {
       initialBotCount: parsed.BOT_COUNTS
     },
@@ -195,7 +168,7 @@ export function loadEnvConfig(env: NodeJS.ProcessEnv = process.env): EnvConfig {
       prefundMultiplier: parsed.PREFUND_MULTIPLIER,
       emergencyTopupCooldownMs: parsed.EMERGENCY_TOPUP_COOLDOWN_MS,
       minBotSol: parsed.MIN_BOT_SOL,
-      vaultSupportedTokens: parseTokenList(parsed.VAULT_SUPPORTED_TOKENS),
+      vaultSupportedMints: parseMintList(parsed.VAULT_SUPPORTED_MINTS),
       stalePricePolicy: parsed.STALE_PRICE_POLICY
     },
     clientDefaults: {
@@ -226,7 +199,6 @@ export function buildAppConfig(env: EnvConfig, runtimeConfig: RuntimeConfigFile)
     adminSecret: env.adminSecret,
     integration: env.integration,
     vault: env.vault,
-    tokenMints: env.tokenMints,
     botFleet: env.botFleet,
     intervals: env.intervals,
     runtime: runtimeConfig.config,

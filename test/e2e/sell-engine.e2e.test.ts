@@ -83,8 +83,10 @@ describe("sell engine integration", () => {
     });
 
     const markets: DekantMarket[] = [
-      { id: "m1", subject: "BTC", category: "crypto", status: "open" },
-      { id: "m2", subject: "ETH", category: "crypto", status: "open" }
+      { id: "m1", subject: "BTC",
+      collateralMint: "Mint11111111111111111111111111111111111111", category: "crypto", status: "open" },
+      { id: "m2", subject: "ETH",
+      collateralMint: "Mint11111111111111111111111111111111111111", category: "crypto", status: "open" }
     ];
 
     const appBoot = await createInitializedApp(env, {
@@ -150,8 +152,10 @@ describe("sell engine integration", () => {
     });
 
     const markets: DekantMarket[] = [
-      { id: "m1", subject: "BTC", category: "crypto", status: "open" },
-      { id: "m2", subject: "ETH", category: "crypto", status: "open" }
+      { id: "m1", subject: "BTC",
+      collateralMint: "Mint11111111111111111111111111111111111111", category: "crypto", status: "open" },
+      { id: "m2", subject: "ETH",
+      collateralMint: "Mint11111111111111111111111111111111111111", category: "crypto", status: "open" }
     ];
 
     const appBoot = await createInitializedApp(env, {
@@ -213,7 +217,8 @@ describe("sell engine integration", () => {
       SELL_CHANCE: "100"
     });
 
-    const markets: DekantMarket[] = [{ id: "m1", subject: "BTC", category: "crypto", status: "open" }];
+    const markets: DekantMarket[] = [{ id: "m1", subject: "BTC",
+      collateralMint: "Mint11111111111111111111111111111111111111", category: "crypto", status: "open" }];
 
     const appBoot = await createInitializedApp(env, {
       store,

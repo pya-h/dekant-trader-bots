@@ -28,7 +28,7 @@ describe("loadEnvConfig", () => {
         HOST: "10.0.0.3",
         PORT: "4321",
         BUY_CHANCE: "74",
-        VAULT_SUPPORTED_TOKENS: "usdt, usdc, btc"
+        VAULT_SUPPORTED_MINTS: "MintA, MintB, MintC"
       })
     );
 
@@ -40,7 +40,7 @@ describe("loadEnvConfig", () => {
     });
 
     expect(config.runtimeDefaults.buyChance).toBe(74);
-    expect(config.runtimeDefaults.vaultSupportedTokens).toEqual(["USDT", "USDC", "BTC"]);
+    expect(config.runtimeDefaults.vaultSupportedMints).toEqual(["MintA", "MintB", "MintC"]);
   });
 
   it("fails fast when required env value is missing", () => {
