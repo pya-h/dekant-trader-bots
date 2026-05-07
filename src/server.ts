@@ -290,7 +290,7 @@ export async function createInitializedApp(
     const validatedConfig = runtimeConfigSchema.parse(nextConfig);
     state.runtimeConfig = {
       ...state.runtimeConfig,
-      updatedAt: new Date().toISOString(),
+      updatedAt: now().toISOString(),
       config: validatedConfig
     };
     await saveRuntimeConfig(state.files.runtimeConfigPath, state.runtimeConfig);
@@ -344,6 +344,22 @@ export async function createInitializedApp(
     });
 
     await persistRuntimeConfig(nextConfig);
+
+    buyEngine?.updateRuntime({
+      buyChance: nextConfig.trading.buyChance,
+      maxAmount: nextConfig.trading.maxAmount
+    });
+    sellEngine?.updateRuntime({
+      sellChance: nextConfig.trading.sellChance
+    });
+    fundingEngine?.updateRuntime({
+      maxAmount: nextConfig.trading.maxAmount,
+      prefundMultiplier: nextConfig.trading.prefundMultiplier,
+      minBotSol: nextConfig.funding.minBotSol,
+      emergencyTopupCooldownMs: nextConfig.funding.emergencyTopupCooldownMs,
+      vaultSupportedTokens: nextConfig.funding.vaultSupportedTokens
+    });
+
     return state.runtimeConfig.config;
   };
 
