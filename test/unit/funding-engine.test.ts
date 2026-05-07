@@ -42,12 +42,13 @@ describe("FundingEngine", () => {
 
     let nowMs = 1_000;
     const engine = new FundingEngine({
+      vaultAddress: "Vault11111111111111111111111111111111111111",
       runtime: {
         maxAmount: 100,
         prefundMultiplier: 10,
         minBotSol: 0.01,
         emergencyTopupCooldownMs: 5_000,
-        vaultSupportedTokens: ["USDT"]
+        vaultSupportedMints: ["USDT"]
       },
       clients: {
         vault: {
@@ -55,10 +56,12 @@ describe("FundingEngine", () => {
           transferSol: vi.fn(async () => ({ txId: "sol-tx" }))
         },
         balances: {
-          getBotBalance: vi.fn(async () => ({
-            sol: 0.1,
-            tokens: { USDT: 0 }
-          }))
+          getBotBalance: vi.fn(async (address: string) => {
+            if (address === "Vault11111111111111111111111111111111111111") {
+              return { sol: 1, tokens: { USDT: 1000 } };
+            }
+            return { sol: 0.1, tokens: { USDT: 0 } };
+          })
         },
         faucet: {
           checkAvailability: vi.fn(async (_token: string, _address: string) => ({ available: false })),
@@ -102,12 +105,13 @@ describe("FundingEngine", () => {
     const faucetRequest = vi.fn(async () => ({ success: true, amount: 12, txId: "faucet-tx" }));
 
     const engine = new FundingEngine({
+      vaultAddress: "Vault11111111111111111111111111111111111111",
       runtime: {
         maxAmount: 100,
         prefundMultiplier: 10,
         minBotSol: 0.01,
         emergencyTopupCooldownMs: 5_000,
-        vaultSupportedTokens: ["USDT"]
+        vaultSupportedMints: ["USDT"]
       },
       clients: {
         vault: {

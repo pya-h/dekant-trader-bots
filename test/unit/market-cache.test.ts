@@ -15,10 +15,14 @@ function makeDekantClient(fetchMarketsImpl: () => Promise<DekantMarket[]>): Deka
 describe("filterEligibleMarkets", () => {
   it("keeps tradable crypto markets and excludes ignored/non-crypto/closed", () => {
     const markets: DekantMarket[] = [
-      { id: "m1", subject: "BTC", category: "crypto", status: "open" },
-      { id: "m2", subject: "ETH", category: "sports", status: "open" },
-      { id: "m3", subject: "SOL", category: "crypto", status: "resolved" },
-      { id: "m4", subject: "DOGE", category: "crypto", status: "open" }
+      { id: "m1", subject: "BTC",
+      collateralMint: "Mint11111111111111111111111111111111111111", category: "crypto", status: "open" },
+      { id: "m2", subject: "ETH",
+      collateralMint: "Mint11111111111111111111111111111111111111", category: "sports", status: "open" },
+      { id: "m3", subject: "SOL",
+      collateralMint: "Mint11111111111111111111111111111111111111", category: "crypto", status: "resolved" },
+      { id: "m4", subject: "DOGE",
+      collateralMint: "Mint11111111111111111111111111111111111111", category: "crypto", status: "open" }
     ];
 
     const result = filterEligibleMarkets({
@@ -38,7 +42,8 @@ describe("MarketCache", () => {
         throw new Error("backend-down");
       }
 
-      return [{ id: "m1", subject: "BTC", category: "crypto", status: "open" }];
+      return [{ id: "m1", subject: "BTC",
+      collateralMint: "Mint11111111111111111111111111111111111111", category: "crypto", status: "open" }];
     });
 
     const cache = new MarketCache({

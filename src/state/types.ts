@@ -7,11 +7,23 @@ export const runtimeTradingConfigSchema = z.object({
   prefundMultiplier: z.number().positive()
 });
 
-export const runtimeFundingConfigSchema = z.object({
-  emergencyTopupCooldownMs: z.number().int().positive(),
-  minBotSol: z.number().positive(),
-  vaultSupportedTokens: z.array(z.string().min(1))
-});
+export const runtimeFundingConfigSchema = z.preprocess(
+  (value) => {
+    if (value && typeof value === "object" && !Array.isArray(value)) {
+      const record = value as Record<string, unknown>;
+      if ("vaultSupportedTokens" in record && !("vaultSupportedMints" in record)) {
+        const { vaultSupportedTokens, ...rest } = record;
+        return { ...rest, vaultSupportedMints: vaultSupportedTokens };
+      }
+    }
+    return value;
+  },
+  z.object({
+    emergencyTopupCooldownMs: z.number().int().positive(),
+    minBotSol: z.number().positive(),
+    vaultSupportedMints: z.array(z.string().min(1))
+  })
+);
 
 export const runtimePriceConfigSchema = z.object({
   stalePricePolicy: z.enum(["skip", "allow"])

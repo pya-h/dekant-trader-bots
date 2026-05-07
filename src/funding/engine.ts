@@ -1,5 +1,6 @@
 import { BotRecord } from "../state/types.js";
 import { FaucetClient } from "../clients/faucet-client.js";
+import type { StructuredLogger } from "../observability/logger.js";
 
 export type VaultClient = {
   transferToken(input: { token: string; toAddress: string; amount: number }): Promise<{ txId: string }>;
@@ -22,15 +23,17 @@ export type FundingEngineOptions = {
     prefundMultiplier: number;
     minBotSol: number;
     emergencyTopupCooldownMs: number;
-    vaultSupportedTokens: string[];
+    vaultSupportedMints: string[];
   };
   clients: {
     vault: VaultClient;
     balances: BalanceClient;
     faucet: FaucetClient;
   };
+  vaultAddress: string;
   now?: () => Date;
   random?: () => number;
+  logger?: StructuredLogger;
 };
 
 export type ManualFundRequest = {
@@ -70,10 +73,6 @@ export type ManualFundResult = {
   targetBotIds: string[];
   results: BotFundingResult[];
 };
-
-function normalizeToken(token: string): string {
-  return token.trim().toUpperCase();
-}
 
 function unique<T>(items: T[]): T[] {
   return [...new Set(items)];
@@ -124,6 +123,8 @@ export function selectFundingAmount(options: {
 export class FundingEngine {
   private runtime: FundingEngineOptions["runtime"];
   private readonly clients: FundingEngineOptions["clients"];
+  private readonly vaultAddress: string;
+  private readonly logger?: StructuredLogger;
   private readonly now: () => Date;
   private readonly random: () => number;
   private readonly lastEmergencyTopupByBot = new Map<string, number>();
@@ -131,9 +132,11 @@ export class FundingEngine {
   constructor(options: FundingEngineOptions) {
     this.runtime = {
       ...options.runtime,
-      vaultSupportedTokens: unique(options.runtime.vaultSupportedTokens.map(normalizeToken))
+      vaultSupportedMints: unique(options.runtime.vaultSupportedMints)
     };
     this.clients = options.clients;
+    this.vaultAddress = options.vaultAddress;
+    this.logger = options.logger;
     this.now = options.now ?? (() => new Date());
     this.random = options.random ?? Math.random;
   }
@@ -142,14 +145,27 @@ export class FundingEngine {
     this.runtime = {
       ...this.runtime,
       ...patch,
-      vaultSupportedTokens: patch.vaultSupportedTokens
-        ? unique(patch.vaultSupportedTokens.map(normalizeToken))
-        : this.runtime.vaultSupportedTokens
+      vaultSupportedMints: patch.vaultSupportedMints
+        ? unique(patch.vaultSupportedMints)
+        : this.runtime.vaultSupportedMints
     };
   }
 
-  private isVaultSupportedToken(token: string): boolean {
-    return this.runtime.vaultSupportedTokens.includes(normalizeToken(token));
+  private isVaultSupportedMint(mint: string): boolean {
+    return this.runtime.vaultSupportedMints.includes(mint);
+  }
+
+  private async vaultHoldsMint(mint: string): Promise<boolean> {
+    try {
+      const balance = await this.clients.balances.getBotBalance(this.vaultAddress, [mint]);
+      return (balance.tokens[mint] ?? 0) > 0;
+    } catch (error) {
+      this.logger?.warn?.("vault_balance_check_failed", {
+        mint,
+        message: error instanceof Error ? error.message : String(error)
+      });
+      return false;
+    }
   }
 
   private async ensureSol(address: string, currentSol: number): Promise<BotFundingResult["sol"]> {
@@ -177,7 +193,7 @@ export class FundingEngine {
     currentAmount: number;
     desiredAmount: number;
   }): Promise<TokenFundingAction> {
-    const token = normalizeToken(options.token);
+    const token = options.token;
     if (options.currentAmount >= options.desiredAmount) {
       return {
         token,
@@ -188,7 +204,22 @@ export class FundingEngine {
 
     const needAmount = amountToFixed(options.desiredAmount - options.currentAmount);
 
-    if (this.isVaultSupportedToken(token)) {
+    if (this.isVaultSupportedMint(token)) {
+      if (!(await this.vaultHoldsMint(token))) {
+        this.logger?.warn?.("vault_missing_mint", {
+          mint: token,
+          botId: options.bot.id,
+          botAddress: options.bot.publicKey,
+          neededAmount: needAmount
+        });
+        return {
+          token,
+          source: "vault",
+          status: "skipped_unavailable",
+          reason: "vault_missing_mint"
+        };
+      }
+
       const tx = await this.clients.vault.transferToken({
         token,
         toAddress: options.bot.publicKey,
@@ -239,10 +270,10 @@ export class FundingEngine {
 
   private resolveTokensForFunding(request: ManualFundRequest): string[] {
     if (request.token) {
-      return [normalizeToken(request.token)];
+      return [request.token];
     }
 
-    return this.runtime.vaultSupportedTokens;
+    return this.runtime.vaultSupportedMints;
   }
 
   async manualFund(request: ManualFundRequest): Promise<ManualFundResult> {
@@ -271,7 +302,7 @@ export class FundingEngine {
           await this.fundTokenForBot({
             bot,
             token,
-            currentAmount: balances.tokens[normalizeToken(token)] ?? 0,
+            currentAmount: balances.tokens[token] ?? 0,
             desiredAmount
           })
         );
@@ -306,7 +337,7 @@ export class FundingEngine {
 
     if (lastTopup !== undefined && nowMs - lastTopup < cooldownMs) {
       return {
-        token: normalizeToken(options.token),
+        token: options.token,
         source: "none",
         status: "skipped_cooldown",
         reason: "cooldown_active"
@@ -322,7 +353,7 @@ export class FundingEngine {
     const action = result.results[0]?.tokenActions[0];
     if (!action) {
       return {
-        token: normalizeToken(options.token),
+        token: options.token,
         source: "none",
         status: "skipped_unsupported",
         reason: "bot_not_found"

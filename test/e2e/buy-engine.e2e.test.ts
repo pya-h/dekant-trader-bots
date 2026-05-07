@@ -79,8 +79,10 @@ describe("buy engine integration", () => {
     });
 
     const markets: DekantMarket[] = [
-      { id: "m1", subject: "BTC", category: "crypto", status: "open", liquidity: 100_000 },
-      { id: "m2", subject: "ETH", category: "crypto", status: "open", liquidity: 80_000 }
+      { id: "m1", subject: "BTC",
+      collateralMint: "Mint11111111111111111111111111111111111111", category: "crypto", status: "open", liquidity: 100_000 },
+      { id: "m2", subject: "ETH",
+      collateralMint: "Mint11111111111111111111111111111111111111", category: "crypto", status: "open", liquidity: 80_000 }
     ];
 
     const harness = createBuyHarness(markets);
@@ -127,9 +129,12 @@ describe("buy engine integration", () => {
     });
 
     const markets: DekantMarket[] = [
-      { id: "m1", subject: "BTC", category: "crypto", status: "open", liquidity: 100_000 },
-      { id: "m2", subject: "ETH", category: "crypto", status: "open", liquidity: 90_000 },
-      { id: "m3", subject: "SOL", category: "crypto", status: "open", liquidity: 70_000 }
+      { id: "m1", subject: "BTC",
+      collateralMint: "Mint11111111111111111111111111111111111111", category: "crypto", status: "open", liquidity: 100_000 },
+      { id: "m2", subject: "ETH",
+      collateralMint: "Mint11111111111111111111111111111111111111", category: "crypto", status: "open", liquidity: 90_000 },
+      { id: "m3", subject: "SOL",
+      collateralMint: "Mint11111111111111111111111111111111111111", category: "crypto", status: "open", liquidity: 70_000 }
     ];
 
     const harness = createBuyHarness(markets);
@@ -174,9 +179,12 @@ describe("buy engine integration", () => {
     });
 
     const markets: DekantMarket[] = [
-      { id: "m1", subject: "BTC", category: "crypto", status: "open", liquidity: 120_000 },
-      { id: "m2", subject: "ETH", category: "crypto", status: "open", liquidity: 80_000 },
-      { id: "m3", subject: "SOL", category: "crypto", status: "open", liquidity: 60_000 }
+      { id: "m1", subject: "BTC",
+      collateralMint: "Mint11111111111111111111111111111111111111", category: "crypto", status: "open", liquidity: 120_000 },
+      { id: "m2", subject: "ETH",
+      collateralMint: "Mint11111111111111111111111111111111111111", category: "crypto", status: "open", liquidity: 80_000 },
+      { id: "m3", subject: "SOL",
+      collateralMint: "Mint11111111111111111111111111111111111111", category: "crypto", status: "open", liquidity: 60_000 }
     ];
 
     const harness = createBuyHarness(markets);

@@ -23,8 +23,10 @@ describe("BuyEngine cycle isolation", () => {
     ];
 
     const markets = [
-      { id: "m1", subject: "BTC", deadline: "2026-07-01T00:00:00.000Z", liquidity: 100_000 },
-      { id: "m2", subject: "ETH", deadline: "2026-07-01T00:00:00.000Z", liquidity: 90_000 }
+      { id: "m1", subject: "BTC",
+      collateralMint: "Mint11111111111111111111111111111111111111", deadline: "2026-07-01T00:00:00.000Z", liquidity: 100_000 },
+      { id: "m2", subject: "ETH",
+      collateralMint: "Mint11111111111111111111111111111111111111", deadline: "2026-07-01T00:00:00.000Z", liquidity: 90_000 }
     ];
 
     let submitCalls = 0;
@@ -126,7 +128,8 @@ describe("BuyEngine cycle isolation", () => {
           lastActiveAt: null
         }
       ],
-      getMarkets: () => [{ id: "m1", subject: "BTC", liquidity: 100_000, deadline: "2026-07-01T00:00:00.000Z" }],
+      getMarkets: () => [{ id: "m1", subject: "BTC",
+      collateralMint: "Mint11111111111111111111111111111111111111", liquidity: 100_000, deadline: "2026-07-01T00:00:00.000Z" }],
       now: () => now,
       onCycleError,
       timer: {

@@ -4,11 +4,17 @@ import { requestJsonWithRetry } from "./http-client.js";
 const marketSchema = z.object({
   id: z.string(),
   subject: z.string(),
+  collateralMint: z.string().min(1),
   category: z.string().optional(),
   status: z.string().optional(),
   liquidity: z.number().optional(),
   deadline: z.string().optional()
 });
+
+const marketsResponseSchema = z.union([
+  z.array(marketSchema),
+  z.object({ data: z.array(marketSchema) }).passthrough()
+]);
 
 const positionSchema = z.object({
   id: z.string(),
@@ -86,7 +92,8 @@ export class HttpDekantClient implements DekantClient {
       fetchImpl: this.fetchImpl
     });
 
-    return z.array(marketSchema).parse(payload);
+    const parsed = marketsResponseSchema.parse(payload);
+    return Array.isArray(parsed) ? parsed : parsed.data;
   }
 
   async fetchPositions(botId: string): Promise<DekantPosition[]> {

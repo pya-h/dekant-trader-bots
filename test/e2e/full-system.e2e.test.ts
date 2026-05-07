@@ -173,6 +173,7 @@ function createFundingHarness(input: {
 
   return {
     funding: {
+        vaultAddress: "Vault11111111111111111111111111111111111111",
       vault: {
         transferToken: async (payload: { token: string; toAddress: string; amount: number }) => {
           transferTokenCalls.push(payload);
@@ -195,6 +196,13 @@ function createFundingHarness(input: {
       },
       balances: {
         getBotBalance: async (address: string, tokens: string[]) => {
+          if (address === "Vault11111111111111111111111111111111111111") {
+            const tokensMap: Record<string, number> = {};
+            for (const token of tokens) {
+              tokensMap[token] = 1_000_000;
+            }
+            return { sol: 1, tokens: tokensMap };
+          }
           const snapshot = input.balancesByAddress.get(address) ?? { sol: 0, tokens: {} };
           const selected: Record<string, number> = {};
           for (const token of tokens) {
@@ -244,8 +252,10 @@ describe("full system e2e", () => {
     const bots = await bootstrapBots(env, store);
 
     const markets: DekantMarket[] = [
-      { id: "m1", subject: "BTC", category: "crypto", status: "open", liquidity: 300_000 },
-      { id: "m2", subject: "ETH", category: "crypto", status: "open", liquidity: 220_000 }
+      { id: "m1", subject: "BTC",
+      collateralMint: "Mint11111111111111111111111111111111111111", category: "crypto", status: "open", liquidity: 300_000 },
+      { id: "m2", subject: "ETH",
+      collateralMint: "Mint11111111111111111111111111111111111111", category: "crypto", status: "open", liquidity: 220_000 }
     ];
 
     const positionsByBotId = createPositionsByBot(bots, markets);
@@ -377,12 +387,18 @@ describe("full system e2e", () => {
     const bots = await bootstrapBots(env, store);
 
     const markets: DekantMarket[] = [
-      { id: "m1", subject: "BTC", category: "crypto", status: "open", liquidity: 400_000 },
-      { id: "m2", subject: "ETH", category: "crypto", status: "open", liquidity: 300_000 },
-      { id: "m3", subject: "SOL", category: "crypto", status: "open", liquidity: 260_000 },
-      { id: "m4", subject: "AVAX", category: "crypto", status: "open", liquidity: 220_000 },
-      { id: "m5", subject: "XRP", category: "crypto", status: "open", liquidity: 210_000 },
-      { id: "m6", subject: "DOGE", category: "crypto", status: "open", liquidity: 180_000 }
+      { id: "m1", subject: "BTC",
+      collateralMint: "Mint11111111111111111111111111111111111111", category: "crypto", status: "open", liquidity: 400_000 },
+      { id: "m2", subject: "ETH",
+      collateralMint: "Mint11111111111111111111111111111111111111", category: "crypto", status: "open", liquidity: 300_000 },
+      { id: "m3", subject: "SOL",
+      collateralMint: "Mint11111111111111111111111111111111111111", category: "crypto", status: "open", liquidity: 260_000 },
+      { id: "m4", subject: "AVAX",
+      collateralMint: "Mint11111111111111111111111111111111111111", category: "crypto", status: "open", liquidity: 220_000 },
+      { id: "m5", subject: "XRP",
+      collateralMint: "Mint11111111111111111111111111111111111111", category: "crypto", status: "open", liquidity: 210_000 },
+      { id: "m6", subject: "DOGE",
+      collateralMint: "Mint11111111111111111111111111111111111111", category: "crypto", status: "open", liquidity: 180_000 }
     ];
 
     const positionsByBotId = createPositionsByBot(bots, markets.slice(0, 3));
@@ -469,8 +485,10 @@ describe("full system e2e", () => {
     });
 
     const markets: DekantMarket[] = [
-      { id: "m1", subject: "BTC", category: "crypto", status: "open", liquidity: 100_000 },
-      { id: "m2", subject: "ETH", category: "crypto", status: "open", liquidity: 100_000 }
+      { id: "m1", subject: "BTC",
+      collateralMint: "Mint11111111111111111111111111111111111111", category: "crypto", status: "open", liquidity: 100_000 },
+      { id: "m2", subject: "ETH",
+      collateralMint: "Mint11111111111111111111111111111111111111", category: "crypto", status: "open", liquidity: 100_000 }
     ];
 
     const firstDekant: DekantClient = {

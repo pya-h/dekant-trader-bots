@@ -54,7 +54,7 @@ export function makeInitialRuntimeConfig(envConfig: EnvConfig): RuntimeConfigFil
       funding: {
         emergencyTopupCooldownMs: envConfig.runtimeDefaults.emergencyTopupCooldownMs,
         minBotSol: envConfig.runtimeDefaults.minBotSol,
-        vaultSupportedTokens: envConfig.runtimeDefaults.vaultSupportedTokens
+        vaultSupportedMints: envConfig.runtimeDefaults.vaultSupportedMints
       },
       price: {
         stalePricePolicy: envConfig.runtimeDefaults.stalePricePolicy

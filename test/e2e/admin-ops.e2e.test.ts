@@ -78,6 +78,7 @@ function createOpsHarness(input: {
   };
 
   const funding = {
+    vaultAddress: "Vault11111111111111111111111111111111111111",
     vault: {
       transferToken: async (input: { token: string; toAddress: string; amount: number }) => {
         transferTokenCalls.push(input);
@@ -96,6 +97,13 @@ function createOpsHarness(input: {
     },
     balances: {
       getBotBalance: async (address: string, tokens: string[]) => {
+        if (address === "Vault11111111111111111111111111111111111111") {
+          const tokensMap: Record<string, number> = {};
+          for (const token of tokens) {
+            tokensMap[token] = 1_000_000;
+          }
+          return { sol: 1, tokens: tokensMap };
+        }
         const snapshot = balancesByAddress.get(address) ?? { sol: 0, tokens: {} };
         const selected: Record<string, number> = {};
         for (const token of tokens) {
@@ -146,8 +154,10 @@ describe("admin ops endpoints", () => {
     await bootstrap.app.close();
 
     const markets: DekantMarket[] = [
-      { id: "m1", subject: "BTC", category: "crypto", status: "open" },
-      { id: "m2", subject: "ETH", category: "crypto", status: "open" }
+      { id: "m1", subject: "BTC",
+      collateralMint: "Mint11111111111111111111111111111111111111", category: "crypto", status: "open" },
+      { id: "m2", subject: "ETH",
+      collateralMint: "Mint11111111111111111111111111111111111111", category: "crypto", status: "open" }
     ];
 
     const positionsByBotId: Record<string, DekantPosition[]> = {
@@ -263,7 +273,8 @@ describe("admin ops endpoints", () => {
 
     const balancesByAddress = new Map<string, BalanceSnapshot>();
     const harness = createOpsHarness({
-      markets: [{ id: "m1", subject: "BTC", category: "crypto", status: "open" }],
+      markets: [{ id: "m1", subject: "BTC",
+      collateralMint: "Mint11111111111111111111111111111111111111", category: "crypto", status: "open" }],
       positionsByBotId: {},
       balancesByAddress
     });
@@ -310,7 +321,8 @@ describe("admin ops endpoints", () => {
     const bots = bootstrap.state.botsState.bots;
     await bootstrap.app.close();
 
-    const markets: DekantMarket[] = [{ id: "m1", subject: "BTC", category: "crypto", status: "open" }];
+    const markets: DekantMarket[] = [{ id: "m1", subject: "BTC",
+      collateralMint: "Mint11111111111111111111111111111111111111", category: "crypto", status: "open" }];
     const positionsByBotId: Record<string, DekantPosition[]> = {
       [bots[0].id]: [{ id: "p1", marketId: "m1", token: "BTC", amount: 10, center: 130 }],
       [bots[1].id]: [{ id: "p2", marketId: "m1", token: "BTC", amount: 9, center: 130 }]
