@@ -55,7 +55,7 @@ E2E tests:
 Exit criteria:
 - State files are created/read correctly and validated.
 
-## Phase 3 - External Clients (Dekant, Price, Faucet)
+## [x] Phase 3 - External Clients (Dekant, Price, Faucet)
 - Implement `dekant-client` interfaces (markets, positions, buy, sell, user prep hooks).
 - Implement `price-client` using `PRICESERVICE_URL`:
   - batch `GET /prices?tokens=...`

@@ -41,6 +41,23 @@ export function createTestAppConfig(overrides: Partial<AppConfig> = {}): AppConf
         stalePricePolicy: "skip"
       }
     },
+    clients: {
+      price: {
+        requestTimeoutMs: 5_000,
+        retryCount: 2,
+        retryBackoffMs: 250
+      },
+      dekant: {
+        requestTimeoutMs: 8_000,
+        retryCount: 2,
+        retryBackoffMs: 300
+      },
+      faucet: {
+        requestTimeoutMs: 5_000,
+        retryCount: 1,
+        retryBackoffMs: 250
+      }
+    },
     ...overrides
   };
 }
@@ -69,6 +86,15 @@ export function createBaseEnv(overrides: NodeJS.ProcessEnv = {}): NodeJS.Process
     MIN_BOT_SOL: "0.01",
     VAULT_SUPPORTED_TOKENS: "USDT,USDC",
     STALE_PRICE_POLICY: "skip",
+    PRICE_REQUEST_TIMEOUT_MS: "5000",
+    PRICE_RETRY_COUNT: "2",
+    PRICE_RETRY_BACKOFF_MS: "250",
+    DEKANT_REQUEST_TIMEOUT_MS: "8000",
+    DEKANT_RETRY_COUNT: "2",
+    DEKANT_RETRY_BACKOFF_MS: "300",
+    FAUCET_REQUEST_TIMEOUT_MS: "5000",
+    FAUCET_RETRY_COUNT: "1",
+    FAUCET_RETRY_BACKOFF_MS: "250",
     ...overrides
   };
 }

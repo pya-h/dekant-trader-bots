@@ -24,7 +24,16 @@ const envSchema = z.object({
   EMERGENCY_TOPUP_COOLDOWN_MS: z.coerce.number().int().positive().default(300_000),
   MIN_BOT_SOL: z.coerce.number().positive().default(0.01),
   VAULT_SUPPORTED_TOKENS: z.string().default("USDT,USDC"),
-  STALE_PRICE_POLICY: z.enum(["skip", "allow"]).default("skip")
+  STALE_PRICE_POLICY: z.enum(["skip", "allow"]).default("skip"),
+  PRICE_REQUEST_TIMEOUT_MS: z.coerce.number().int().positive().default(5_000),
+  PRICE_RETRY_COUNT: z.coerce.number().int().nonnegative().default(2),
+  PRICE_RETRY_BACKOFF_MS: z.coerce.number().int().nonnegative().default(250),
+  DEKANT_REQUEST_TIMEOUT_MS: z.coerce.number().int().positive().default(8_000),
+  DEKANT_RETRY_COUNT: z.coerce.number().int().nonnegative().default(2),
+  DEKANT_RETRY_BACKOFF_MS: z.coerce.number().int().nonnegative().default(300),
+  FAUCET_REQUEST_TIMEOUT_MS: z.coerce.number().int().positive().default(5_000),
+  FAUCET_RETRY_COUNT: z.coerce.number().int().nonnegative().default(1),
+  FAUCET_RETRY_BACKOFF_MS: z.coerce.number().int().nonnegative().default(250)
 });
 
 export type EnvConfig = {
@@ -60,6 +69,23 @@ export type EnvConfig = {
     vaultSupportedTokens: string[];
     stalePricePolicy: "skip" | "allow";
   };
+  clientDefaults: {
+    price: {
+      requestTimeoutMs: number;
+      retryCount: number;
+      retryBackoffMs: number;
+    };
+    dekant: {
+      requestTimeoutMs: number;
+      retryCount: number;
+      retryBackoffMs: number;
+    };
+    faucet: {
+      requestTimeoutMs: number;
+      retryCount: number;
+      retryBackoffMs: number;
+    };
+  };
 };
 
 export type AppConfig = {
@@ -86,6 +112,7 @@ export type AppConfig = {
     initialFundingDelayMs: number;
   };
   runtime: RuntimeConfigFile["config"];
+  clients: EnvConfig["clientDefaults"];
 };
 
 function parseTokenList(raw: string): string[] {
@@ -130,6 +157,23 @@ export function loadEnvConfig(env: NodeJS.ProcessEnv = process.env): EnvConfig {
       minBotSol: parsed.MIN_BOT_SOL,
       vaultSupportedTokens: parseTokenList(parsed.VAULT_SUPPORTED_TOKENS),
       stalePricePolicy: parsed.STALE_PRICE_POLICY
+    },
+    clientDefaults: {
+      price: {
+        requestTimeoutMs: parsed.PRICE_REQUEST_TIMEOUT_MS,
+        retryCount: parsed.PRICE_RETRY_COUNT,
+        retryBackoffMs: parsed.PRICE_RETRY_BACKOFF_MS
+      },
+      dekant: {
+        requestTimeoutMs: parsed.DEKANT_REQUEST_TIMEOUT_MS,
+        retryCount: parsed.DEKANT_RETRY_COUNT,
+        retryBackoffMs: parsed.DEKANT_RETRY_BACKOFF_MS
+      },
+      faucet: {
+        requestTimeoutMs: parsed.FAUCET_REQUEST_TIMEOUT_MS,
+        retryCount: parsed.FAUCET_RETRY_COUNT,
+        retryBackoffMs: parsed.FAUCET_RETRY_BACKOFF_MS
+      }
     }
   };
 }
@@ -145,6 +189,7 @@ export function buildAppConfig(env: EnvConfig, runtimeConfig: RuntimeConfigFile)
     vault: env.vault,
     botFleet: env.botFleet,
     intervals: env.intervals,
-    runtime: runtimeConfig.config
+    runtime: runtimeConfig.config,
+    clients: env.clientDefaults
   };
 }
