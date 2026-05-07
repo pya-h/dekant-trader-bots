@@ -5,7 +5,12 @@ import type { LogLevel } from "./observability/logger.js";
 
 const envSchema = z.object({
   NODE_ENV: z.string().default("development"),
-  LOG_LEVEL: z.enum(["debug", "info", "warn", "error", "silent"]).default("info"),
+  LOG_LEVEL: z
+    .preprocess(
+      (value) => (typeof value === "string" ? value.trim().toLowerCase() : value),
+      z.enum(["debug", "info", "warn", "error", "silent"]).catch("info")
+    )
+    .default("info"),
   HOST: z.string().default("0.0.0.0"),
   PORT: z.coerce.number().int().positive().default(3000),
   ADMIN_SECRET: z.string().min(1),
