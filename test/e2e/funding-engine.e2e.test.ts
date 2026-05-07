@@ -92,7 +92,7 @@ function buildFundingHarness(bots: BotRecord[], initialSol = 0, initialTokens: R
       }
     },
     faucet: {
-      checkAvailability: async (token: string) => {
+      checkAvailability: async (token: string, _walletAddress: string) => {
         const queue = faucetAvailability.get(token) ?? [];
         if (queue.length === 0) {
           return { available: false, reason: "not-configured" };

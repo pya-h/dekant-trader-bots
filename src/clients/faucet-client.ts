@@ -20,7 +20,7 @@ export type FaucetRequestInput = {
 };
 
 export interface FaucetClient {
-  checkAvailability(token: string): Promise<FaucetAvailability>;
+  checkAvailability(token: string, walletAddress: string): Promise<FaucetAvailability>;
   requestTokens(input: FaucetRequestInput): Promise<z.infer<typeof requestFaucetResultSchema>>;
 }
 
@@ -47,9 +47,14 @@ export class HttpFaucetClient implements FaucetClient {
     this.fetchImpl = options.fetchImpl;
   }
 
-  async checkAvailability(token: string): Promise<FaucetAvailability> {
+  async checkAvailability(token: string, walletAddress: string): Promise<FaucetAvailability> {
+    const params = new URLSearchParams({
+      address: walletAddress,
+      token
+    });
+
     const payload = await requestJsonWithRetry<unknown>({
-      url: `${this.baseUrl}/faucet/${encodeURIComponent(token)}/availability`,
+      url: `${this.baseUrl}/faucet/status?${params.toString()}`,
       timeoutMs: this.timeoutMs,
       retryCount: this.retryCount,
       retryBackoffMs: this.retryBackoffMs,
@@ -63,9 +68,10 @@ export class HttpFaucetClient implements FaucetClient {
     input: FaucetRequestInput
   ): Promise<z.infer<typeof requestFaucetResultSchema>> {
     const payload = await requestJsonWithRetry<unknown>({
-      url: `${this.baseUrl}/faucet/${encodeURIComponent(input.token)}/request`,
+      url: `${this.baseUrl}/faucet/claim`,
       method: "POST",
       body: {
+        token: input.token,
         walletAddress: input.walletAddress
       },
       timeoutMs: this.timeoutMs,

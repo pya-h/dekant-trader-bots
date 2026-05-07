@@ -61,7 +61,7 @@ describe("FundingEngine", () => {
           }))
         },
         faucet: {
-          checkAvailability: vi.fn(async () => ({ available: false })),
+          checkAvailability: vi.fn(async (_token: string, _address: string) => ({ available: false })),
           requestTokens: vi.fn(async () => ({ success: false }))
         }
       },
