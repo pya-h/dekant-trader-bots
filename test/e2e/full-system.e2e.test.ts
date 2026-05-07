@@ -222,7 +222,7 @@ function createFundingHarness(input: {
         }
       },
       faucet: {
-        checkAvailability: async (token: string) => ({
+        checkAvailability: async (token: string, _walletAddress: string) => ({
           available: faucetTokenSet.has(token.toUpperCase()),
           reason: faucetTokenSet.has(token.toUpperCase()) ? undefined : "unsupported"
         }),

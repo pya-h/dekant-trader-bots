@@ -204,7 +204,7 @@ export class FundingEngine {
       };
     }
 
-    const availability = await this.clients.faucet.checkAvailability(token);
+    const availability = await this.clients.faucet.checkAvailability(token, options.bot.publicKey);
     if (!availability.available) {
       return {
         token,

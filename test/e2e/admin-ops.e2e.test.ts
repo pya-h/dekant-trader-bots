@@ -123,7 +123,7 @@ function createOpsHarness(input: {
       }
     },
     faucet: {
-      checkAvailability: async () => ({ available: false }),
+      checkAvailability: async (_token: string, _address: string) => ({ available: false }),
       requestTokens: async () => ({ success: false })
     },
     random: () => 0.99
