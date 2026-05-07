@@ -17,7 +17,9 @@ const envSchema = z.object({
   DATABASE_URL: z.string().min(1).optional(),
   DEKANT_BACKEND_URL: z.string().url(),
   PRICESERVICE_URL: z.string().url(),
+  SOLANA_RPC_URL: z.string().url(),
   VAULT_SECRET_KEY: z.string().min(1),
+  TOKEN_MINTS: z.string().min(1),
   BOT_COUNTS: z.coerce.number().int().positive().default(5),
   MARKET_REFRESH_INTERVAL_MS: z.coerce.number().int().positive().default(3_600_000),
   BUY_INTERVAL_MS: z.coerce.number().int().positive().default(1_200_000),
@@ -53,10 +55,12 @@ export type EnvConfig = {
   integration: {
     dekantBackendUrl: string;
     priceServiceUrl: string;
+    solanaRpcUrl: string;
   };
   vault: {
     secretKey: string;
   };
+  tokenMints: Record<string, string>;
   botFleet: {
     initialBotCount: number;
   };
@@ -104,10 +108,12 @@ export type AppConfig = {
   integration: {
     dekantBackendUrl: string;
     priceServiceUrl: string;
+    solanaRpcUrl: string;
   };
   vault: {
     secretKey: string;
   };
+  tokenMints: Record<string, string>;
   botFleet: {
     initialBotCount: number;
   };
@@ -129,6 +135,30 @@ function parseTokenList(raw: string): string[] {
     .filter((token) => token.length > 0);
 }
 
+function parseTokenMints(raw: string): Record<string, string> {
+  const entries: Record<string, string> = {};
+  for (const part of raw.split(",")) {
+    const trimmed = part.trim();
+    if (!trimmed) {
+      continue;
+    }
+    const eq = trimmed.indexOf("=");
+    if (eq <= 0) {
+      throw new Error(`invalid_token_mint_entry: ${trimmed}`);
+    }
+    const symbol = trimmed.slice(0, eq).trim().toUpperCase();
+    const mint = trimmed.slice(eq + 1).trim();
+    if (!symbol || !mint) {
+      throw new Error(`invalid_token_mint_entry: ${trimmed}`);
+    }
+    entries[symbol] = mint;
+  }
+  if (Object.keys(entries).length === 0) {
+    throw new Error("token_mints_empty");
+  }
+  return entries;
+}
+
 export function loadEnvConfig(env: NodeJS.ProcessEnv = process.env): EnvConfig {
   const parsed = envSchema.parse(env);
 
@@ -141,11 +171,13 @@ export function loadEnvConfig(env: NodeJS.ProcessEnv = process.env): EnvConfig {
     databaseUrl: parsed.DATABASE_URL,
     integration: {
       dekantBackendUrl: parsed.DEKANT_BACKEND_URL,
-      priceServiceUrl: parsed.PRICESERVICE_URL
+      priceServiceUrl: parsed.PRICESERVICE_URL,
+      solanaRpcUrl: parsed.SOLANA_RPC_URL
     },
     vault: {
       secretKey: parsed.VAULT_SECRET_KEY
     },
+    tokenMints: parseTokenMints(parsed.TOKEN_MINTS),
     botFleet: {
       initialBotCount: parsed.BOT_COUNTS
     },
@@ -194,6 +226,7 @@ export function buildAppConfig(env: EnvConfig, runtimeConfig: RuntimeConfigFile)
     adminSecret: env.adminSecret,
     integration: env.integration,
     vault: env.vault,
+    tokenMints: env.tokenMints,
     botFleet: env.botFleet,
     intervals: env.intervals,
     runtime: runtimeConfig.config,

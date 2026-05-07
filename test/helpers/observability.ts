@@ -4,17 +4,17 @@ export type CapturedErrorLog = {
 };
 
 type StructuredLogger = {
-  error(event: string, fields: Record<string, unknown>): void;
+  error(event: string, fields?: Record<string, unknown>): void;
 };
 
 export function createCapturedLogger() {
   const entries: CapturedErrorLog[] = [];
 
   const logger: StructuredLogger = {
-    error(event: string, fields: Record<string, unknown>) {
+    error(event: string, fields?: Record<string, unknown>) {
       entries.push({
         event,
-        fields: { ...fields }
+        fields: { ...(fields ?? {}) }
       });
     }
   };

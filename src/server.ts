@@ -1,12 +1,16 @@
 import { pathToFileURL } from "node:url";
+import { Connection } from "@solana/web3.js";
 import dotenv from "dotenv";
 import { buildApp } from "./app.js";
 import { bootstrapState } from "./bootstrap.js";
-import { buildAppConfig } from "./config.js";
+import { buildAppConfig, loadEnvConfig } from "./config.js";
 import { scheduleInitialFundingIfNeeded, TimerProvider } from "./bots/initial-funding.js";
 import { addBotsAndPersist, BotLifecycleDependencies, reconcileAndPersistBots } from "./bots/lifecycle.js";
-import { FaucetClient } from "./clients/faucet-client.js";
-import { DekantClient } from "./clients/dekant-client.js";
+import { FaucetClient, HttpFaucetClient } from "./clients/faucet-client.js";
+import { DekantClient, HttpDekantClient } from "./clients/dekant-client.js";
+import { PriceClient } from "./clients/price-client.js";
+import { loadKeypairFromSecret, SolanaVaultClient } from "./clients/solana-vault-client.js";
+import { SolanaBalanceClient } from "./clients/solana-balance-client.js";
 import { BalanceClient, FundingEngine, ManualFundRequest, VaultClient } from "./funding/engine.js";
 import { MarketCache } from "./markets/cache.js";
 import { runtimeConfigSchema } from "./state/types.js";
@@ -325,7 +329,7 @@ export async function createInitializedApp(
 
   const removeIgnoredMarketIds = async (ids: string[]) => {
     const normalizedSet = new Set(normalizeMarketIds(ids));
-    const nextIgnored = state.runtimeConfig.config.ignoredMarketIds.filter((id) => !normalizedSet.has(id));
+    const nextIgnored = state.runtimeConfig.config.ignoredMarketIds.filter((id: string) => !normalizedSet.has(id));
     const nextConfig = {
       ...state.runtimeConfig.config,
       ignoredMarketIds: nextIgnored
@@ -1067,7 +1071,55 @@ async function start(): Promise<void> {
   const startupLogger = createLogger({ level: parseLogLevel(process.env.LOG_LEVEL) });
   startupLogger.info?.("server_starting");
 
-  const appCtx = await createInitializedApp(process.env);
+  const envConfig = loadEnvConfig(process.env);
+
+  const dekantClient = new HttpDekantClient({
+    baseUrl: envConfig.integration.dekantBackendUrl,
+    timeoutMs: envConfig.clientDefaults.dekant.requestTimeoutMs,
+    retryCount: envConfig.clientDefaults.dekant.retryCount,
+    retryBackoffMs: envConfig.clientDefaults.dekant.retryBackoffMs
+  });
+
+  const faucetClient = new HttpFaucetClient({
+    baseUrl: envConfig.integration.dekantBackendUrl,
+    timeoutMs: envConfig.clientDefaults.faucet.requestTimeoutMs,
+    retryCount: envConfig.clientDefaults.faucet.retryCount,
+    retryBackoffMs: envConfig.clientDefaults.faucet.retryBackoffMs
+  });
+
+  const priceClient = new PriceClient({
+    baseUrl: envConfig.integration.priceServiceUrl,
+    timeoutMs: envConfig.clientDefaults.price.requestTimeoutMs,
+    retryCount: envConfig.clientDefaults.price.retryCount,
+    retryBackoffMs: envConfig.clientDefaults.price.retryBackoffMs,
+    stalePolicy: envConfig.runtimeDefaults.stalePricePolicy
+  });
+
+  const connection = new Connection(envConfig.integration.solanaRpcUrl, "confirmed");
+  const vaultKeypair = loadKeypairFromSecret(envConfig.vault.secretKey);
+  startupLogger.info?.("vault_loaded", {
+    publicKey: vaultKeypair.publicKey.toBase58(),
+    rpcUrl: envConfig.integration.solanaRpcUrl,
+    tokenSymbols: Object.keys(envConfig.tokenMints)
+  });
+
+  const vaultClient = new SolanaVaultClient({
+    connection,
+    vaultKeypair,
+    tokenMints: envConfig.tokenMints
+  });
+
+  const balanceClient = new SolanaBalanceClient({
+    connection,
+    tokenMints: envConfig.tokenMints
+  });
+
+  const appCtx = await createInitializedApp(process.env, {
+    marketCache: { client: dekantClient },
+    funding: { vault: vaultClient, balances: balanceClient, faucet: faucetClient },
+    buy: { dekant: dekantClient, price: priceClient },
+    sell: { dekant: dekantClient, price: priceClient }
+  });
   const { app, config } = appCtx;
 
   await app.listen({ host: config.host, port: config.port });
