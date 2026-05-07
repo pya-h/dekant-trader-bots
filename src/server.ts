@@ -5,13 +5,28 @@ import { bootstrapState } from "./bootstrap.js";
 import { buildAppConfig } from "./config.js";
 import { scheduleInitialFundingIfNeeded, TimerProvider } from "./bots/initial-funding.js";
 import { addBotsAndPersist, BotLifecycleDependencies, reconcileAndPersistBots } from "./bots/lifecycle.js";
+import { FaucetClient } from "./clients/faucet-client.js";
+import { DekantClient } from "./clients/dekant-client.js";
+import { BalanceClient, FundingEngine, ManualFundRequest, VaultClient } from "./funding/engine.js";
+import { MarketCache } from "./markets/cache.js";
 
 dotenv.config({ quiet: true });
 
-type AppInitializationOptions = {
+export type AppInitializationOptions = {
   onInitialFundingRequested?: (context: { createdBotIds: string[]; delayMs: number }) => void | Promise<void>;
   timer?: TimerProvider;
   botLifecycleDeps?: BotLifecycleDependencies;
+  funding?: {
+    vault: VaultClient;
+    balances: BalanceClient;
+    faucet: FaucetClient;
+    now?: () => Date;
+    random?: () => number;
+  };
+  marketCache?: {
+    client: DekantClient;
+    refreshIntervalMs?: number;
+  };
 };
 
 export async function createInitializedApp(
@@ -41,6 +56,31 @@ export async function createInitializedApp(
   });
 
   const config = buildAppConfig(envConfig, state.runtimeConfig);
+  const marketCache = options.marketCache
+    ? new MarketCache({
+        client: options.marketCache.client,
+        refreshIntervalMs: options.marketCache.refreshIntervalMs ?? config.intervals.marketRefreshMs,
+        ignoredMarketIds: config.runtime.ignoredMarketIds
+      })
+    : null;
+  const fundingEngine = options.funding
+    ? new FundingEngine({
+        runtime: {
+          maxAmount: config.runtime.trading.maxAmount,
+          prefundMultiplier: config.runtime.trading.prefundMultiplier,
+          minBotSol: config.runtime.funding.minBotSol,
+          emergencyTopupCooldownMs: config.runtime.funding.emergencyTopupCooldownMs,
+          vaultSupportedTokens: config.runtime.funding.vaultSupportedTokens
+        },
+        clients: {
+          vault: options.funding.vault,
+          balances: options.funding.balances,
+          faucet: options.funding.faucet
+        },
+        now: options.funding.now,
+        random: options.funding.random
+      })
+    : null;
   const app = buildApp(config, {
     stateDir: config.stateDir,
     botCount: state.botsState.bots.length,
@@ -76,7 +116,39 @@ export async function createInitializedApp(
           totalBotCount: result.updatedState.bots.length
         };
       }
-    }
+    },
+    funding: fundingEngine
+      ? {
+          manualFund: async (request: Omit<ManualFundRequest, "bots"> = {}) =>
+            fundingEngine.manualFund({
+              bots: state.botsState.bots,
+              ...request
+            }),
+          prefund: async () => fundingEngine.prefundBots(state.botsState.bots),
+          emergencyTopup: async (input: { botId: string; token: string; amount?: number }) => {
+            const bot = state.botsState.bots.find((candidate) => candidate.id === input.botId);
+            if (!bot) {
+              throw new Error("bot_not_found");
+            }
+            return fundingEngine.requestEmergencyTopup({
+              bot,
+              token: input.token,
+              amount: input.amount
+            });
+          }
+        }
+      : null,
+    markets: marketCache
+      ? {
+          refresh: async () => marketCache.refresh(),
+          start: async () => marketCache.start({ immediate: true }),
+          stop: () => marketCache.stop(),
+          getSnapshot: () => marketCache.getSnapshot(),
+          setIgnoredMarketIds: (ids: string[]) => marketCache.setIgnoredMarketIds(ids),
+          addIgnoredMarketIds: (ids: string[]) => marketCache.addIgnoredMarketIds(ids),
+          removeIgnoredMarketIds: (ids: string[]) => marketCache.removeIgnoredMarketIds(ids)
+        }
+      : null
   };
 }
 

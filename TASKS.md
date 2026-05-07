@@ -98,7 +98,7 @@ E2E tests:
 Exit criteria:
 - Bot identity lifecycle is stable across restarts.
 
-## Phase 5 - Funding Engine (Vault + SOL + Cooldown + Fallback)
+## [x] Phase 5 - Funding Engine (Vault + SOL + Cooldown + Fallback)
 - Implement periodic prefunding strategy.
 - Implement emergency low-balance top-up with per-bot cooldown.
 - Implement SOL fee top-up checks.
@@ -120,7 +120,7 @@ E2E tests:
 Exit criteria:
 - Funding behavior is predictable, safe, and non-bursty.
 
-## Phase 6 - Market Cache and Active Market Refresh Loop
+## [x] Phase 6 - Market Cache and Active Market Refresh Loop
 - Implement market refresh scheduler.
 - Keep in-memory active market cache synchronized by interval.
 - Apply eligibility filters (crypto, tradable, not ignored).
