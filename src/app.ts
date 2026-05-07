@@ -2,6 +2,7 @@ import Fastify, { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { parsePaginationQuery } from "./api/pagination.js";
 import { AppConfig } from "./config.js";
+import type { StructuredLogger } from "./observability/logger.js";
 
 type StatusRuntimeSnapshot = {
   botCount: number;
@@ -114,9 +115,47 @@ type RuntimeConfigPatch = z.infer<typeof runtimeConfigPatchSchema>;
 export function buildApp(
   config: AppConfig,
   runtimeSnapshot?: RuntimeSnapshotInput,
-  adminHandlers: AdminHandlers = {}
+  adminHandlers: AdminHandlers = {},
+  logger?: StructuredLogger
 ): FastifyInstance {
   const app = Fastify({ logger: false });
+
+  if (logger) {
+    app.addHook("onRequest", async (request) => {
+      logger.debug?.("http_request", {
+        method: request.method,
+        url: request.url,
+        remoteAddress: request.ip
+      });
+    });
+
+    app.addHook("onResponse", async (request, reply) => {
+      const statusCode = reply.statusCode;
+      const fields = {
+        method: request.method,
+        url: request.url,
+        statusCode,
+        durationMs: Math.round(reply.elapsedTime ?? 0)
+      };
+      if (statusCode >= 500) {
+        logger.error("http_response", fields);
+      } else if (statusCode >= 400) {
+        logger.warn?.("http_response", fields);
+      } else {
+        logger.info?.("http_response", fields);
+      }
+    });
+
+    app.setErrorHandler((error, request, reply) => {
+      logger.error("http_unhandled_error", {
+        method: request.method,
+        url: request.url,
+        message: error.message,
+        statusCode: reply.statusCode
+      });
+      reply.send(error);
+    });
+  }
   const resolveRuntimeSnapshot = () => {
     if (!runtimeSnapshot) {
       return null;

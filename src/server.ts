@@ -13,6 +13,7 @@ import { runtimeConfigSchema } from "./state/types.js";
 import type { StateStore } from "./storage/state-store.js";
 import { TradeStatsStore } from "./metrics/trade-stats.js";
 import { classifyError } from "./observability/errors.js";
+import { createLogger, parseLogLevel, StructuredLogger } from "./observability/logger.js";
 import { MonitoredJob, RuntimeMonitor } from "./observability/runtime-monitor.js";
 import {
   BuyEngine,
@@ -31,10 +32,6 @@ import {
 
 dotenv.config({ quiet: true });
 
-type StructuredLogger = {
-  error(event: string, fields: Record<string, unknown>): void;
-};
-
 type LoopIntervalProvider = {
   setInterval(handler: () => void, intervalMs: number): unknown;
   clearInterval(handle: unknown): void;
@@ -45,19 +42,16 @@ const defaultLoopIntervalProvider: LoopIntervalProvider = {
   clearInterval: (handle) => clearInterval(handle as NodeJS.Timeout)
 };
 
-function makeDefaultLogger(now: () => Date): StructuredLogger {
-  return {
-    error(event: string, fields: Record<string, unknown>) {
-      console.error(
-        JSON.stringify({
-          timestamp: now().toISOString(),
-          level: "error",
-          event,
-          ...fields
-        })
-      );
-    }
-  };
+function safeInfo(logger: StructuredLogger, event: string, fields?: Record<string, unknown>) {
+  logger.info?.(event, fields);
+}
+
+function safeDebug(logger: StructuredLogger, event: string, fields?: Record<string, unknown>) {
+  logger.debug?.(event, fields);
+}
+
+function safeWarn(logger: StructuredLogger, event: string, fields?: Record<string, unknown>) {
+  logger.warn?.(event, fields);
 }
 
 export type AppInitializationOptions = {
@@ -176,10 +170,25 @@ export async function createInitializedApp(
   options: AppInitializationOptions = {}
 ) {
   const now = options.observability?.now ?? (() => new Date());
-  const logger = options.observability?.logger ?? makeDefaultLogger(now);
+  const logger =
+    options.observability?.logger ??
+    createLogger({
+      level: parseLogLevel(env.LOG_LEVEL),
+      now
+    });
   const runtimeMonitor = new RuntimeMonitor({ now });
 
-  const { envConfig, state } = await bootstrapState(env, options.store);
+  safeInfo(logger, "app_initializing", { nodeEnv: env.NODE_ENV });
+
+  const { envConfig, state } = await bootstrapState(env, options.store, logger);
+  safeInfo(logger, "app_state_bootstrapped", {
+    botCount: state.botsState.bots.length,
+    runtimeConfigUpdatedAt: state.runtimeConfig.updatedAt
+  });
+  safeDebug(logger, "bot_reconciliation_starting", {
+    targetCount: envConfig.botFleet.initialBotCount,
+    currentCount: state.botsState.bots.length
+  });
   const reconciliation = await reconcileAndPersistBots({
     store: state.store,
     botsState: state.botsState,
@@ -187,6 +196,11 @@ export async function createInitializedApp(
     deps: options.botLifecycleDeps
   });
   state.botsState = reconciliation.updatedState;
+  safeInfo(logger, "bot_reconciliation_completed", {
+    hadExistingBots: reconciliation.hadExistingBots,
+    createdBots: reconciliation.createdBots.length,
+    totalBots: state.botsState.bots.length
+  });
 
   const config = buildAppConfig(envConfig, state.runtimeConfig);
   const marketCache = options.marketCache
@@ -345,6 +359,9 @@ export async function createInitializedApp(
     });
 
     await persistRuntimeConfig(nextConfig);
+    safeInfo(logger, "runtime_config_updated", {
+      patchedKeys: Object.keys(patch)
+    });
 
     buyEngine?.updateRuntime({
       buyChance: nextConfig.trading.buyChance,
@@ -402,6 +419,10 @@ export async function createInitializedApp(
     }
 
     runtimeMonitor.recordJobStart("buy_cycle");
+    safeDebug(logger, "buy_cycle_start", {
+      source: input.source ?? "manual",
+      marketIds: input.marketIds?.length ?? null
+    });
 
     try {
       const cycle = await buyEngine.runCycle({
@@ -409,6 +430,12 @@ export async function createInitializedApp(
         marketIds: input.marketIds
       });
       statsStore.ingestBuyCycle(cycle);
+      safeInfo(logger, "buy_cycle_completed", {
+        source: cycle.source,
+        actions: cycle.actions.length,
+        succeeded: cycle.actions.filter((a) => a.status === "submitted").length,
+        failed: cycle.actions.filter((a) => a.status === "failed_submit").length
+      });
 
       for (const action of cycle.actions) {
         if (action.status !== "failed_submit") {
@@ -455,6 +482,10 @@ export async function createInitializedApp(
     }
 
     runtimeMonitor.recordJobStart("sell_cycle");
+    safeDebug(logger, "sell_cycle_start", {
+      source: input.source ?? "manual",
+      marketIds: input.marketIds?.length ?? null
+    });
 
     try {
       const cycle = await sellEngine.runCycle({
@@ -462,6 +493,12 @@ export async function createInitializedApp(
         marketIds: input.marketIds
       });
       statsStore.ingestSellCycle(cycle);
+      safeInfo(logger, "sell_cycle_completed", {
+        source: cycle.source,
+        actions: cycle.actions.length,
+        succeeded: cycle.actions.filter((a) => a.status === "submitted").length,
+        failed: cycle.actions.filter((a) => a.status === "failed_submit").length
+      });
 
       for (const action of cycle.actions) {
         if (action.status !== "failed_submit") {
@@ -508,9 +545,13 @@ export async function createInitializedApp(
     }
 
     runtimeMonitor.recordJobStart("market_refresh");
+    safeDebug(logger, "market_refresh_start");
     const result = await marketCache.refresh();
     if (result.updated) {
       runtimeMonitor.recordJobSuccess("market_refresh");
+      safeInfo(logger, "market_refresh_completed", {
+        markets: marketCache.getSnapshot().markets.length
+      });
     } else {
       trackAndLogFailure({
         monitor: runtimeMonitor,
@@ -536,12 +577,20 @@ export async function createInitializedApp(
     }
 
     runtimeMonitor.recordJobStart("manual_fund");
+    safeDebug(logger, "manual_fund_start", {
+      source,
+      botIds: input.botIds?.length ?? null,
+      addresses: input.addresses?.length ?? null,
+      amount: input.amount ?? null,
+      token: input.token ?? null
+    });
     try {
       const result = await fundingEngine.manualFund({
         bots: state.botsState.bots,
         ...input
       });
       runtimeMonitor.recordJobSuccess("manual_fund");
+      safeInfo(logger, "manual_fund_completed", { source });
       return result;
     } catch (error) {
       trackAndLogFailure({
@@ -564,9 +613,11 @@ export async function createInitializedApp(
     }
 
     runtimeMonitor.recordJobStart("manual_fund");
+    safeDebug(logger, "prefund_cycle_start", { source, botCount: state.botsState.bots.length });
     try {
       const result = await fundingEngine.prefundBots(state.botsState.bots);
       runtimeMonitor.recordJobSuccess("manual_fund");
+      safeInfo(logger, "prefund_cycle_completed", { source });
       return result;
     } catch (error) {
       trackAndLogFailure({
@@ -590,6 +641,10 @@ export async function createInitializedApp(
     timer: options.timer,
     trigger: async (context) => {
       runtimeMonitor.recordJobStart("initial_funding");
+      safeInfo(logger, "initial_funding_triggered", {
+        createdBots: context.createdBots.length,
+        delayMs: context.delayMs
+      });
       try {
         if (options.onInitialFundingRequested) {
           await options.onInitialFundingRequested({
@@ -606,6 +661,7 @@ export async function createInitializedApp(
         }
 
         runtimeMonitor.recordJobSuccess("initial_funding");
+        safeInfo(logger, "initial_funding_completed");
       } catch (error) {
         trackAndLogFailure({
           monitor: runtimeMonitor,
@@ -630,6 +686,18 @@ export async function createInitializedApp(
     }
   });
 
+  if (fundingSchedule.scheduled) {
+    safeInfo(logger, "initial_funding_scheduled", {
+      delayMs: fundingSchedule.delayMs,
+      createdBots: reconciliation.createdBots.length
+    });
+  } else {
+    safeDebug(logger, "initial_funding_skipped", {
+      hadExistingBots: reconciliation.hadExistingBots,
+      createdBots: reconciliation.createdBots.length
+    });
+  }
+
   const marketLoopTimer = options.marketCache?.timer ?? defaultLoopIntervalProvider;
   const buyLoopTimer = options.buy?.timer ?? defaultLoopIntervalProvider;
   const sellLoopTimer = options.sell?.timer ?? defaultLoopIntervalProvider;
@@ -644,6 +712,11 @@ export async function createInitializedApp(
     if (!marketCache || marketLoopHandle !== null) {
       return;
     }
+
+    safeInfo(logger, "market_loop_starting", {
+      intervalMs: config.intervals.marketRefreshMs,
+      immediate: options.immediate !== false
+    });
 
     if (options.immediate !== false) {
       await runMarketRefresh().catch(() => {});
@@ -660,12 +733,18 @@ export async function createInitializedApp(
     }
     marketLoopTimer.clearInterval(marketLoopHandle);
     marketLoopHandle = null;
+    safeInfo(logger, "market_loop_stopped");
   };
 
   const startBuyLoop = async (options: { immediate?: boolean } = {}) => {
     if (!buyEngine || buyLoopHandle !== null) {
       return;
     }
+
+    safeInfo(logger, "buy_loop_starting", {
+      intervalMs: config.intervals.buyMs,
+      immediate: options.immediate !== false
+    });
 
     if (options.immediate !== false) {
       await runBuyCycle({ source: "scheduled" }).catch(() => {});
@@ -682,12 +761,18 @@ export async function createInitializedApp(
     }
     buyLoopTimer.clearInterval(buyLoopHandle);
     buyLoopHandle = null;
+    safeInfo(logger, "buy_loop_stopped");
   };
 
   const startSellLoop = async (options: { immediate?: boolean } = {}) => {
     if (!sellEngine || sellLoopHandle !== null) {
       return;
     }
+
+    safeInfo(logger, "sell_loop_starting", {
+      intervalMs: config.intervals.sellMs,
+      immediate: options.immediate !== false
+    });
 
     if (options.immediate !== false) {
       await runSellCycle({ source: "scheduled" }).catch(() => {});
@@ -704,12 +789,18 @@ export async function createInitializedApp(
     }
     sellLoopTimer.clearInterval(sellLoopHandle);
     sellLoopHandle = null;
+    safeInfo(logger, "sell_loop_stopped");
   };
 
   const startFundingLoop = async (options: { immediate?: boolean } = {}) => {
     if (!fundingEngine || fundingLoopHandle !== null) {
       return;
     }
+
+    safeInfo(logger, "funding_loop_starting", {
+      intervalMs: config.intervals.fundingMs,
+      immediate: options.immediate === true
+    });
 
     if (options.immediate === true) {
       await runPrefundCycle("scheduled").catch(() => {});
@@ -726,10 +817,12 @@ export async function createInitializedApp(
     }
     fundingLoopTimer.clearInterval(fundingLoopHandle);
     fundingLoopHandle = null;
+    safeInfo(logger, "funding_loop_stopped");
   };
 
   const addBotsWithReadiness = async (count: number) => {
     runtimeMonitor.recordJobStart("add_bots");
+    safeInfo(logger, "add_bots_start", { count });
 
     try {
       const result = await addBotsAndPersist({
@@ -762,6 +855,12 @@ export async function createInitializedApp(
       }
 
       runtimeMonitor.recordJobSuccess("add_bots");
+      safeInfo(logger, "add_bots_completed", {
+        added: result.addedBots.length,
+        totalBots: result.updatedState.bots.length,
+        funded: funding !== null,
+        fundingError: fundingError?.type ?? null
+      });
       return {
         addedBots: result.addedBots,
         totalBotCount: result.updatedState.bots.length,
@@ -831,7 +930,8 @@ export async function createInitializedApp(
         ? async (input: { page: number; pageSize: number }) => getBotBalances(input)
         : undefined,
       updateRuntimeConfig: async (patch: RuntimeConfigPatchInput) => updateRuntimeConfig(patch)
-    }
+    },
+    logger
   );
 
   app.addHook("onClose", async () => {
@@ -964,15 +1064,25 @@ export async function createInitializedApp(
 }
 
 async function start(): Promise<void> {
+  const startupLogger = createLogger({ level: parseLogLevel(process.env.LOG_LEVEL) });
+  startupLogger.info?.("server_starting");
+
   const appCtx = await createInitializedApp(process.env);
   const { app, config } = appCtx;
 
   await app.listen({ host: config.host, port: config.port });
+  startupLogger.info?.("server_listening", { host: config.host, port: config.port });
 
   await appCtx.markets?.start({ immediate: true });
   await appCtx.buy?.start({ immediate: true });
   await appCtx.sell?.start({ immediate: true });
   await appCtx.funding?.start({ immediate: false });
+  startupLogger.info?.("server_ready", {
+    market: appCtx.markets !== null,
+    buy: appCtx.buy !== null,
+    sell: appCtx.sell !== null,
+    funding: appCtx.funding !== null
+  });
 }
 
 function isMainModule(): boolean {
