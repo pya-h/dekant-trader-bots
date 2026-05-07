@@ -117,7 +117,7 @@ describe("fault tolerance", () => {
 
     expect(recoveredBuy.status).toBe(200);
     expect(recoveredBuy.body.cycle.submittedCount).toBe(2);
-    expect(capturedLogger.entries).toHaveLength(1);
+    expect(capturedLogger.getByEvent("buy_cycle_failed")).toHaveLength(1);
 
     await appCtx.app.close();
   });

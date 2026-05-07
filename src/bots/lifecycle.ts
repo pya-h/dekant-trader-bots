@@ -1,4 +1,6 @@
-import { randomBytes, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
+import { Keypair } from "@solana/web3.js";
+import bs58 from "bs58";
 import { BotRecord, BotsStateFile } from "../state/types.js";
 import type { StateStore } from "../storage/state-store.js";
 
@@ -31,9 +33,10 @@ function defaultGenerateBotId(): string {
 }
 
 function defaultGenerateKeypair(): { publicKey: string; secretKey: string } {
+  const keypair = Keypair.generate();
   return {
-    publicKey: randomBytes(32).toString("hex"),
-    secretKey: randomBytes(64).toString("hex")
+    publicKey: keypair.publicKey.toBase58(),
+    secretKey: bs58.encode(keypair.secretKey)
   };
 }
 

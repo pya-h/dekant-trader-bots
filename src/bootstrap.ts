@@ -1,7 +1,43 @@
+import { PublicKey } from "@solana/web3.js";
 import { buildAppConfig, EnvConfig, loadEnvConfig } from "./config.js";
 import type { StructuredLogger } from "./observability/logger.js";
-import { BotsStateFile, RuntimeConfigFile } from "./state/types.js";
+import { BotRecord, BotsStateFile, RuntimeConfigFile } from "./state/types.js";
 import type { StateStore } from "./storage/state-store.js";
+
+function isValidSolanaAddress(address: string): boolean {
+  try {
+    new PublicKey(address);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function pruneInvalidBots(
+  state: BotsStateFile,
+  logger?: StructuredLogger
+): { state: BotsStateFile; pruned: BotRecord[] } {
+  const valid: BotRecord[] = [];
+  const pruned: BotRecord[] = [];
+  for (const bot of state.bots) {
+    if (isValidSolanaAddress(bot.publicKey)) {
+      valid.push(bot);
+    } else {
+      pruned.push(bot);
+    }
+  }
+  if (pruned.length > 0) {
+    logger?.warn?.("bots_state_pruned_invalid", {
+      pruned: pruned.length,
+      remaining: valid.length,
+      botIds: pruned.map((bot) => bot.id)
+    });
+  }
+  return {
+    state: pruned.length === 0 ? state : { ...state, bots: valid },
+    pruned
+  };
+}
 
 export function makeInitialRuntimeConfig(envConfig: EnvConfig): RuntimeConfigFile {
   return {
@@ -73,7 +109,7 @@ export async function bootstrapState(
   }
 
   const existingBots = await store.loadBotsState();
-  const botsState: BotsStateFile = existingBots ?? {
+  let botsState: BotsStateFile = existingBots ?? {
     version: 1,
     updatedAt: new Date().toISOString(),
     bots: []
@@ -83,6 +119,16 @@ export async function bootstrapState(
     await store.saveBotsState(botsState);
   } else {
     logger?.debug?.("bots_state_loaded", { botCount: existingBots.bots.length });
+  }
+
+  const pruneResult = pruneInvalidBots(botsState, logger);
+  botsState = pruneResult.state;
+  if (pruneResult.pruned.length > 0) {
+    botsState = {
+      ...botsState,
+      updatedAt: new Date().toISOString()
+    };
+    await store.saveBotsState(botsState);
   }
 
   return {

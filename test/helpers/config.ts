@@ -8,10 +8,15 @@ export function createTestAppConfig(overrides: Partial<AppConfig> = {}): AppConf
     adminSecret: "test-secret",
     integration: {
       dekantBackendUrl: "https://backend.example.com",
-      priceServiceUrl: "https://prices.example.com"
+      priceServiceUrl: "https://prices.example.com",
+      solanaRpcUrl: "https://rpc.example.com"
     },
     vault: {
       secretKey: "vault-secret"
+    },
+    tokenMints: {
+      USDT: "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB",
+      USDC: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
     },
     botFleet: {
       initialBotCount: 2
@@ -69,7 +74,9 @@ export function createBaseEnv(overrides: NodeJS.ProcessEnv = {}): NodeJS.Process
     ADMIN_SECRET: "test-secret",
     DEKANT_BACKEND_URL: "https://backend.example.com",
     PRICESERVICE_URL: "https://prices.example.com",
+    SOLANA_RPC_URL: "https://rpc.example.com",
     VAULT_SECRET_KEY: "vault-secret",
+    TOKEN_MINTS: "USDC=EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v,USDT=Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB",
     BOT_COUNTS: "2",
     MARKET_REFRESH_INTERVAL_MS: "3600000",
     BUY_INTERVAL_MS: "1200000",

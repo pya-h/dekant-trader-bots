@@ -17,6 +17,9 @@
     "test:e2e": "vitest run --config vitest.e2e.config.ts"
   },
   "dependencies": {
+    "@solana/spl-token": "^0.4.13",
+    "@solana/web3.js": "^1.95.8",
+    "bs58": "^6.0.0",
     "dotenv": "^17.4.2",
     "fastify": "^5.8.5",
     "postgres": "^3.4.9",
