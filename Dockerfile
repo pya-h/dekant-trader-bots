@@ -18,7 +18,6 @@ WORKDIR /app
 ENV NODE_ENV=production
 
 RUN apk add --no-cache ca-certificates tzdata curl wget \
-  && mkdir -p /app/state \
   && chown -R node:node /app
 
 COPY --from=builder /app/package.json /app/package-lock.json ./

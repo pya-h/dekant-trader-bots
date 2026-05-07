@@ -1,25 +1,10 @@
-import { promises as fs } from "node:fs";
-import os from "node:os";
-import path from "node:path";
 import request from "supertest";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { createInitializedApp } from "../../src/server.js";
 import { createBaseEnv } from "../helpers/config.js";
 import { DekantClient, DekantMarket, DekantPosition, SubmitTradeRequest } from "../../src/clients/dekant-client.js";
 import { MarketPriceResolution, PriceQuote } from "../../src/clients/price-client.js";
-
-const tempRoots: string[] = [];
-
-async function createTempDir(): Promise<string> {
-  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "dtb-admin-ops-e2e-"));
-  tempRoots.push(dir);
-  return dir;
-}
-
-afterEach(async () => {
-  await Promise.all(tempRoots.map((dir) => fs.rm(dir, { recursive: true, force: true })));
-  tempRoots.length = 0;
-});
+import { InMemoryStateStore } from "../helpers/memory-state-store.js";
 
 type BalanceSnapshot = {
   sol: number;
@@ -143,16 +128,15 @@ function createOpsHarness(input: {
 
 describe("admin ops endpoints", () => {
   it("force buy/sell/fund endpoints execute with and without selectors", async () => {
-    const tempRoot = await createTempDir();
-    const stateDir = path.join(tempRoot, "state");
+    const store = new InMemoryStateStore();
     const env = createBaseEnv({
-      STATE_DIR: stateDir,
       BOT_COUNTS: "2",
       BUY_CHANCE: "100",
       SELL_CHANCE: "100"
     });
 
     const bootstrap = await createInitializedApp(env, {
+      store,
       timer: {
         setTimeout: () => "handle",
         clearTimeout: () => {}
@@ -190,6 +174,7 @@ describe("admin ops endpoints", () => {
     const harness = createOpsHarness({ markets, positionsByBotId, balancesByAddress });
 
     const appCtx = await createInitializedApp(env, {
+      store,
       timer: {
         setTimeout: () => "handle",
         clearTimeout: () => {}
@@ -272,10 +257,7 @@ describe("admin ops endpoints", () => {
   });
 
   it("add bots endpoint creates bots and runs first-time readiness funding", async () => {
-    const tempRoot = await createTempDir();
-    const stateDir = path.join(tempRoot, "state");
     const env = createBaseEnv({
-      STATE_DIR: stateDir,
       BOT_COUNTS: "1"
     });
 
@@ -287,6 +269,7 @@ describe("admin ops endpoints", () => {
     });
 
     const appCtx = await createInitializedApp(env, {
+      store: new InMemoryStateStore(),
       timer: {
         setTimeout: () => "handle",
         clearTimeout: () => {}
@@ -310,16 +293,15 @@ describe("admin ops endpoints", () => {
   });
 
   it("stats endpoint returns paginated per-bot details and global totals", async () => {
-    const tempRoot = await createTempDir();
-    const stateDir = path.join(tempRoot, "state");
+    const store = new InMemoryStateStore();
     const env = createBaseEnv({
-      STATE_DIR: stateDir,
       BOT_COUNTS: "2",
       BUY_CHANCE: "100",
       SELL_CHANCE: "100"
     });
 
     const bootstrap = await createInitializedApp(env, {
+      store,
       timer: {
         setTimeout: () => "handle",
         clearTimeout: () => {}
@@ -349,6 +331,7 @@ describe("admin ops endpoints", () => {
     });
 
     const appCtx = await createInitializedApp(env, {
+      store,
       timer: {
         setTimeout: () => "handle",
         clearTimeout: () => {}

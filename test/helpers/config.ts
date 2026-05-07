@@ -5,7 +5,6 @@ export function createTestAppConfig(overrides: Partial<AppConfig> = {}): AppConf
     nodeEnv: "test",
     host: "127.0.0.1",
     port: 0,
-    stateDir: "state",
     adminSecret: "test-secret",
     integration: {
       dekantBackendUrl: "https://backend.example.com",
@@ -68,7 +67,6 @@ export function createBaseEnv(overrides: NodeJS.ProcessEnv = {}): NodeJS.Process
     HOST: "127.0.0.1",
     PORT: "3000",
     ADMIN_SECRET: "test-secret",
-    STATE_DIR: "state",
     DEKANT_BACKEND_URL: "https://backend.example.com",
     PRICESERVICE_URL: "https://prices.example.com",
     VAULT_SECRET_KEY: "vault-secret",

@@ -7,7 +7,7 @@ const envSchema = z.object({
   HOST: z.string().default("0.0.0.0"),
   PORT: z.coerce.number().int().positive().default(3000),
   ADMIN_SECRET: z.string().min(1),
-  STATE_DIR: z.string().min(1).default("state"),
+  DATABASE_URL: z.string().min(1).optional(),
   DEKANT_BACKEND_URL: z.string().url(),
   PRICESERVICE_URL: z.string().url(),
   VAULT_SECRET_KEY: z.string().min(1),
@@ -41,7 +41,7 @@ export type EnvConfig = {
   host: string;
   port: number;
   adminSecret: string;
-  stateDir: string;
+  databaseUrl: string | undefined;
   integration: {
     dekantBackendUrl: string;
     priceServiceUrl: string;
@@ -93,7 +93,6 @@ export type AppConfig = {
   host: string;
   port: number;
   adminSecret: string;
-  stateDir: string;
   integration: {
     dekantBackendUrl: string;
     priceServiceUrl: string;
@@ -130,7 +129,7 @@ export function loadEnvConfig(env: NodeJS.ProcessEnv = process.env): EnvConfig {
     host: parsed.HOST,
     port: parsed.PORT,
     adminSecret: parsed.ADMIN_SECRET,
-    stateDir: parsed.STATE_DIR,
+    databaseUrl: parsed.DATABASE_URL,
     integration: {
       dekantBackendUrl: parsed.DEKANT_BACKEND_URL,
       priceServiceUrl: parsed.PRICESERVICE_URL
@@ -184,7 +183,6 @@ export function buildAppConfig(env: EnvConfig, runtimeConfig: RuntimeConfigFile)
     host: env.host,
     port: env.port,
     adminSecret: env.adminSecret,
-    stateDir: env.stateDir,
     integration: env.integration,
     vault: env.vault,
     botFleet: env.botFleet,

@@ -1,11 +1,7 @@
-import { promises as fs } from "node:fs";
-import os from "node:os";
-import path from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { addBotsAndPersist, reconcileBotsToTarget } from "../../src/bots/lifecycle.js";
 import { BotsStateFile } from "../../src/state/types.js";
-
-const tempRoots: string[] = [];
+import { InMemoryStateStore } from "../helpers/memory-state-store.js";
 
 function makeBaseState(botCount = 0): BotsStateFile {
   return {
@@ -20,17 +16,6 @@ function makeBaseState(botCount = 0): BotsStateFile {
     }))
   };
 }
-
-async function createTempDir(): Promise<string> {
-  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "dtb-lifecycle-"));
-  tempRoots.push(dir);
-  return dir;
-}
-
-afterEach(async () => {
-  await Promise.all(tempRoots.map((dir) => fs.rm(dir, { recursive: true, force: true })));
-  tempRoots.length = 0;
-});
 
 describe("reconcileBotsToTarget", () => {
   it("creates only missing bots to reach target", () => {
@@ -69,11 +54,10 @@ describe("reconcileBotsToTarget", () => {
 
 describe("addBotsAndPersist", () => {
   it("adds requested bots and persists updated state", async () => {
-    const dir = await createTempDir();
-    const filePath = path.join(dir, "bots.json");
+    const store = new InMemoryStateStore();
 
     const result = await addBotsAndPersist({
-      botsStatePath: filePath,
+      store,
       botsState: makeBaseState(1),
       count: 2,
       deps: {
@@ -95,7 +79,7 @@ describe("addBotsAndPersist", () => {
     expect(result.addedBots).toHaveLength(2);
     expect(result.updatedState.bots).toHaveLength(3);
 
-    const persisted = JSON.parse(await fs.readFile(filePath, "utf8")) as BotsStateFile;
-    expect(persisted.bots).toHaveLength(3);
+    const persisted = await store.loadBotsState();
+    expect(persisted!.bots).toHaveLength(3);
   });
 });

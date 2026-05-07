@@ -1,10 +1,8 @@
-import { promises as fs } from "node:fs";
-import os from "node:os";
-import path from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { createInitializedApp, type AppInitializationOptions } from "../../src/server.js";
 import { BotRecord } from "../../src/state/types.js";
 import { createBaseEnv } from "../helpers/config.js";
+import { InMemoryStateStore } from "../helpers/memory-state-store.js";
 
 type BalanceSnapshot = {
   sol: number;
@@ -17,19 +15,6 @@ type FundingHarness = {
   transferSolCalls: Array<{ toAddress: string; amount: number }>;
   setFaucetAvailability: (token: string, values: Array<{ available: boolean; reason?: string }>) => void;
 };
-
-const tempRoots: string[] = [];
-
-async function createTempDir(): Promise<string> {
-  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "dtb-funding-e2e-"));
-  tempRoots.push(dir);
-  return dir;
-}
-
-afterEach(async () => {
-  await Promise.all(tempRoots.map((dir) => fs.rm(dir, { recursive: true, force: true })));
-  tempRoots.length = 0;
-});
 
 function buildFundingHarness(bots: BotRecord[], initialSol = 0, initialTokens: Record<string, number> = {}): {
   harness: FundingHarness;
@@ -133,14 +118,13 @@ function buildFundingHarness(bots: BotRecord[], initialSol = 0, initialTokens: R
 
 describe("funding engine integration", () => {
   it("out-of-interval manual fund targets all bots when no selector provided", async () => {
-    const tempRoot = await createTempDir();
-    const stateDir = path.join(tempRoot, "state");
+    const store = new InMemoryStateStore();
     const env = createBaseEnv({
-      STATE_DIR: stateDir,
       BOT_COUNTS: "3"
     });
 
     const appCtx = await createInitializedApp(env, {
+      store,
       timer: {
         setTimeout: () => "handle",
         clearTimeout: () => {}
@@ -150,6 +134,7 @@ describe("funding engine integration", () => {
     const { harness, deps } = buildFundingHarness(appCtx.state.botsState.bots, 0, { USDT: 0, USDC: 0 });
 
     const withFunding = await createInitializedApp(env, {
+      store,
       timer: {
         setTimeout: () => "handle",
         clearTimeout: () => {}
@@ -169,14 +154,13 @@ describe("funding engine integration", () => {
   });
 
   it("manual fund selector uses union of bot IDs and addresses", async () => {
-    const tempRoot = await createTempDir();
-    const stateDir = path.join(tempRoot, "state");
+    const store = new InMemoryStateStore();
     const env = createBaseEnv({
-      STATE_DIR: stateDir,
       BOT_COUNTS: "3"
     });
 
     const initialized = await createInitializedApp(env, {
+      store,
       timer: {
         setTimeout: () => "handle",
         clearTimeout: () => {}
@@ -186,6 +170,7 @@ describe("funding engine integration", () => {
     const { harness, deps } = buildFundingHarness(initialized.state.botsState.bots, 0, { USDT: 0, USDC: 0 });
 
     const withFunding = await createInitializedApp(env, {
+      store,
       timer: {
         setTimeout: () => "handle",
         clearTimeout: () => {}
@@ -206,14 +191,13 @@ describe("funding engine integration", () => {
   });
 
   it("unsupported token uses faucet fallback then skips when unavailable", async () => {
-    const tempRoot = await createTempDir();
-    const stateDir = path.join(tempRoot, "state");
+    const store = new InMemoryStateStore();
     const env = createBaseEnv({
-      STATE_DIR: stateDir,
       BOT_COUNTS: "1"
     });
 
     const initialized = await createInitializedApp(env, {
+      store,
       timer: {
         setTimeout: () => "handle",
         clearTimeout: () => {}
@@ -227,6 +211,7 @@ describe("funding engine integration", () => {
     ]);
 
     const withFunding = await createInitializedApp(env, {
+      store,
       timer: {
         setTimeout: () => "handle",
         clearTimeout: () => {}
