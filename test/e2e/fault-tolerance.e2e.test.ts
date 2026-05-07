@@ -1,33 +1,15 @@
-import { promises as fs } from "node:fs";
-import os from "node:os";
-import path from "node:path";
 import request from "supertest";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { createInitializedApp } from "../../src/server.js";
 import { DekantClient, DekantMarket } from "../../src/clients/dekant-client.js";
 import { MarketPriceResolution, PriceQuote } from "../../src/clients/price-client.js";
 import { createBaseEnv } from "../helpers/config.js";
 import { createCapturedLogger } from "../helpers/observability.js";
-
-const tempRoots: string[] = [];
-
-async function createTempDir(): Promise<string> {
-  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "dtb-fault-tolerance-e2e-"));
-  tempRoots.push(dir);
-  return dir;
-}
-
-afterEach(async () => {
-  await Promise.all(tempRoots.map((dir) => fs.rm(dir, { recursive: true, force: true })));
-  tempRoots.length = 0;
-});
+import { InMemoryStateStore } from "../helpers/memory-state-store.js";
 
 describe("fault tolerance", () => {
   it("keeps running and reports degraded health when upstream dependencies fail", async () => {
-    const tempRoot = await createTempDir();
-    const stateDir = path.join(tempRoot, "state");
     const env = createBaseEnv({
-      STATE_DIR: stateDir,
       BOT_COUNTS: "2",
       BUY_CHANCE: "100",
       MAX_AMOUNT: "30"
@@ -82,6 +64,7 @@ describe("fault tolerance", () => {
     };
 
     const appCtx = await createInitializedApp(env, {
+      store: new InMemoryStateStore(),
       timer: {
         setTimeout: () => "handle",
         clearTimeout: () => {}

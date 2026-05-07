@@ -1,25 +1,10 @@
-import { promises as fs } from "node:fs";
-import os from "node:os";
-import path from "node:path";
 import request from "supertest";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { DekantClient, DekantMarket, SubmitTradeRequest } from "../../src/clients/dekant-client.js";
 import { MarketPriceResolution, PriceQuote } from "../../src/clients/price-client.js";
 import { createInitializedApp } from "../../src/server.js";
 import { createBaseEnv } from "../helpers/config.js";
-
-const tempRoots: string[] = [];
-
-async function createTempDir(): Promise<string> {
-  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "dtb-buy-e2e-"));
-  tempRoots.push(dir);
-  return dir;
-}
-
-afterEach(async () => {
-  await Promise.all(tempRoots.map((dir) => fs.rm(dir, { recursive: true, force: true })));
-  tempRoots.length = 0;
-});
+import { InMemoryStateStore } from "../helpers/memory-state-store.js";
 
 function createBuyHarness(markets: DekantMarket[]) {
   const submitBuyCalls: SubmitTradeRequest[] = [];
@@ -87,10 +72,7 @@ function createBuyHarness(markets: DekantMarket[]) {
 
 describe("buy engine integration", () => {
   it("forced buy endpoint triggers an immediate buy cycle", async () => {
-    const tempRoot = await createTempDir();
-    const stateDir = path.join(tempRoot, "state");
     const env = createBaseEnv({
-      STATE_DIR: stateDir,
       BOT_COUNTS: "2",
       BUY_CHANCE: "100",
       MAX_AMOUNT: "50"
@@ -104,6 +86,7 @@ describe("buy engine integration", () => {
     const harness = createBuyHarness(markets);
 
     const appCtx = await createInitializedApp(env, {
+      store: new InMemoryStateStore(),
       timer: {
         setTimeout: () => "handle",
         clearTimeout: () => {}
@@ -137,10 +120,7 @@ describe("buy engine integration", () => {
   });
 
   it("forced buy endpoint market_ids filter scopes bot buys to selected markets", async () => {
-    const tempRoot = await createTempDir();
-    const stateDir = path.join(tempRoot, "state");
     const env = createBaseEnv({
-      STATE_DIR: stateDir,
       BOT_COUNTS: "3",
       BUY_CHANCE: "100",
       MAX_AMOUNT: "50"
@@ -155,6 +135,7 @@ describe("buy engine integration", () => {
     const harness = createBuyHarness(markets);
 
     const appCtx = await createInitializedApp(env, {
+      store: new InMemoryStateStore(),
       timer: {
         setTimeout: () => "handle",
         clearTimeout: () => {}
@@ -186,10 +167,7 @@ describe("buy engine integration", () => {
   });
 
   it("a multi-bot cycle resolves prices once and shares results across all bot actions", async () => {
-    const tempRoot = await createTempDir();
-    const stateDir = path.join(tempRoot, "state");
     const env = createBaseEnv({
-      STATE_DIR: stateDir,
       BOT_COUNTS: "4",
       BUY_CHANCE: "100",
       MAX_AMOUNT: "60"
@@ -204,6 +182,7 @@ describe("buy engine integration", () => {
     const harness = createBuyHarness(markets);
 
     const appCtx = await createInitializedApp(env, {
+      store: new InMemoryStateStore(),
       timer: {
         setTimeout: () => "handle",
         clearTimeout: () => {}

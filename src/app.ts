@@ -4,7 +4,6 @@ import { parsePaginationQuery } from "./api/pagination.js";
 import { AppConfig } from "./config.js";
 
 type StatusRuntimeSnapshot = {
-  stateDir: string;
   botCount: number;
   buyChance: number;
   sellChance: number;

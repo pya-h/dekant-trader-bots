@@ -10,7 +10,7 @@ import { DekantClient } from "./clients/dekant-client.js";
 import { BalanceClient, FundingEngine, ManualFundRequest, VaultClient } from "./funding/engine.js";
 import { MarketCache } from "./markets/cache.js";
 import { runtimeConfigSchema } from "./state/types.js";
-import { saveRuntimeConfig } from "./storage/runtime-config-store.js";
+import type { StateStore } from "./storage/state-store.js";
 import { TradeStatsStore } from "./metrics/trade-stats.js";
 import { classifyError } from "./observability/errors.js";
 import { MonitoredJob, RuntimeMonitor } from "./observability/runtime-monitor.js";
@@ -61,6 +61,7 @@ function makeDefaultLogger(now: () => Date): StructuredLogger {
 }
 
 export type AppInitializationOptions = {
+  store?: StateStore;
   onInitialFundingRequested?: (context: { createdBotIds: string[]; delayMs: number }) => void | Promise<void>;
   timer?: TimerProvider;
   botLifecycleDeps?: BotLifecycleDependencies;
@@ -178,9 +179,9 @@ export async function createInitializedApp(
   const logger = options.observability?.logger ?? makeDefaultLogger(now);
   const runtimeMonitor = new RuntimeMonitor({ now });
 
-  const { envConfig, state } = await bootstrapState(env);
+  const { envConfig, state } = await bootstrapState(env, options.store);
   const reconciliation = await reconcileAndPersistBots({
-    botsStatePath: state.files.botsStatePath,
+    store: state.store,
     botsState: state.botsState,
     targetCount: envConfig.botFleet.initialBotCount,
     deps: options.botLifecycleDeps
@@ -293,7 +294,7 @@ export async function createInitializedApp(
       updatedAt: now().toISOString(),
       config: validatedConfig
     };
-    await saveRuntimeConfig(state.files.runtimeConfigPath, state.runtimeConfig);
+    await state.store.saveRuntimeConfig(state.runtimeConfig);
   };
 
   const addIgnoredMarketIds = async (ids: string[]) => {
@@ -732,7 +733,7 @@ export async function createInitializedApp(
 
     try {
       const result = await addBotsAndPersist({
-        botsStatePath: state.files.botsStatePath,
+        store: state.store,
         botsState: state.botsState,
         count,
         deps: options.botLifecycleDeps
@@ -782,7 +783,6 @@ export async function createInitializedApp(
   const app = buildApp(
     config,
     () => ({
-      stateDir: config.stateDir,
       botCount: state.botsState.bots.length,
       buyChance: state.runtimeConfig.config.trading.buyChance,
       sellChance: state.runtimeConfig.config.trading.sellChance,
@@ -840,6 +840,7 @@ export async function createInitializedApp(
     stopMarketLoop();
     stopFundingLoop();
     fundingSchedule.cancel();
+    await state.store.close();
   });
 
   return {

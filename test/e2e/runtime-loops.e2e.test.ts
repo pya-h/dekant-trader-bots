@@ -1,30 +1,15 @@
-import { promises as fs } from "node:fs";
-import os from "node:os";
-import path from "node:path";
 import request from "supertest";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { createInitializedApp } from "../../src/server.js";
 import { createBaseEnv } from "../helpers/config.js";
 import { DekantClient, DekantMarket } from "../../src/clients/dekant-client.js";
 import { MarketPriceResolution, PriceQuote } from "../../src/clients/price-client.js";
-
-const tempRoots: string[] = [];
+import { InMemoryStateStore } from "../helpers/memory-state-store.js";
 
 type BalanceSnapshot = {
   sol: number;
   tokens: Record<string, number>;
 };
-
-async function createTempDir(): Promise<string> {
-  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "dtb-runtime-loops-e2e-"));
-  tempRoots.push(dir);
-  return dir;
-}
-
-afterEach(async () => {
-  await Promise.all(tempRoots.map((dir) => fs.rm(dir, { recursive: true, force: true })));
-  tempRoots.length = 0;
-});
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -99,10 +84,7 @@ function makeFundingHarness(balancesByAddress: Map<string, BalanceSnapshot>) {
 
 describe("runtime loops", () => {
   it("runs default initial funding after delay when callback is not provided", async () => {
-    const tempRoot = await createTempDir();
-    const stateDir = path.join(tempRoot, "state");
     const env = createBaseEnv({
-      STATE_DIR: stateDir,
       BOT_COUNTS: "2"
     });
 
@@ -112,6 +94,7 @@ describe("runtime loops", () => {
     const harness = makeFundingHarness(balancesByAddress);
 
     const appCtx = await createInitializedApp(env, {
+      store: new InMemoryStateStore(),
       timer: {
         setTimeout: (handler: () => void) => {
           scheduledTimeout = handler;
@@ -137,10 +120,7 @@ describe("runtime loops", () => {
   });
 
   it("scheduled buy loop contributes to stats without manual trigger", async () => {
-    const tempRoot = await createTempDir();
-    const stateDir = path.join(tempRoot, "state");
     const env = createBaseEnv({
-      STATE_DIR: stateDir,
       BOT_COUNTS: "2",
       BUY_CHANCE: "100"
     });
@@ -188,6 +168,7 @@ describe("runtime loops", () => {
     let buyTick: (() => void) | null = null;
 
     const appCtx = await createInitializedApp(env, {
+      store: new InMemoryStateStore(),
       timer: {
         setTimeout: () => "timeout",
         clearTimeout: () => {}
@@ -233,10 +214,7 @@ describe("runtime loops", () => {
   });
 
   it("funding loop executes periodic prefunding", async () => {
-    const tempRoot = await createTempDir();
-    const stateDir = path.join(tempRoot, "state");
     const env = createBaseEnv({
-      STATE_DIR: stateDir,
       BOT_COUNTS: "2"
     });
 
@@ -246,6 +224,7 @@ describe("runtime loops", () => {
     const harness = makeFundingHarness(balancesByAddress);
 
     const appCtx = await createInitializedApp(env, {
+      store: new InMemoryStateStore(),
       timer: {
         setTimeout: () => "timeout",
         clearTimeout: () => {}

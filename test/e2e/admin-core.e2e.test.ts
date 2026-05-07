@@ -1,25 +1,11 @@
-import { promises as fs } from "node:fs";
-import os from "node:os";
-import path from "node:path";
 import request from "supertest";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { createInitializedApp } from "../../src/server.js";
 import { DekantClient, DekantMarket } from "../../src/clients/dekant-client.js";
 import { createBaseEnv } from "../helpers/config.js";
+import { InMemoryStateStore } from "../helpers/memory-state-store.js";
 
-const tempRoots: string[] = [];
 type BalanceSnapshot = { sol: number; tokens: Record<string, number> };
-
-async function createTempDir(): Promise<string> {
-  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "dtb-admin-core-e2e-"));
-  tempRoots.push(dir);
-  return dir;
-}
-
-afterEach(async () => {
-  await Promise.all(tempRoots.map((dir) => fs.rm(dir, { recursive: true, force: true })));
-  tempRoots.length = 0;
-});
 
 function createDekantClient(markets: DekantMarket[]): DekantClient {
   return {
@@ -33,10 +19,10 @@ function createDekantClient(markets: DekantMarket[]): DekantClient {
 
 describe("admin core endpoints", () => {
   it("enforces admin auth on core control endpoints", async () => {
-    const tempRoot = await createTempDir();
-    const env = createBaseEnv({ STATE_DIR: path.join(tempRoot, "state") });
+    const env = createBaseEnv();
 
     const appCtx = await createInitializedApp(env, {
+      store: new InMemoryStateStore(),
       timer: {
         setTimeout: () => "handle",
         clearTimeout: () => {}
@@ -53,9 +39,8 @@ describe("admin core endpoints", () => {
   });
 
   it("persists ignored markets and applies them to active market filtering", async () => {
-    const tempRoot = await createTempDir();
-    const stateDir = path.join(tempRoot, "state");
-    const env = createBaseEnv({ STATE_DIR: stateDir });
+    const store = new InMemoryStateStore();
+    const env = createBaseEnv();
 
     const markets: DekantMarket[] = [
       { id: "m1", subject: "BTC", category: "crypto", status: "open" },
@@ -65,6 +50,7 @@ describe("admin core endpoints", () => {
     const client = createDekantClient(markets);
 
     const first = await createInitializedApp(env, {
+      store,
       timer: {
         setTimeout: () => "handle",
         clearTimeout: () => {}
@@ -92,6 +78,7 @@ describe("admin core endpoints", () => {
     await first.app.close();
 
     const second = await createInitializedApp(env, {
+      store,
       timer: {
         setTimeout: () => "handle",
         clearTimeout: () => {}
@@ -109,11 +96,11 @@ describe("admin core endpoints", () => {
   });
 
   it("returns paginated bot balances", async () => {
-    const tempRoot = await createTempDir();
-    const stateDir = path.join(tempRoot, "state");
-    const env = createBaseEnv({ STATE_DIR: stateDir, BOT_COUNTS: "3" });
+    const store = new InMemoryStateStore();
+    const env = createBaseEnv({ BOT_COUNTS: "3" });
 
     const boot = await createInitializedApp(env, {
+      store,
       timer: {
         setTimeout: () => "handle",
         clearTimeout: () => {}
@@ -136,6 +123,7 @@ describe("admin core endpoints", () => {
     );
 
     const appCtx = await createInitializedApp(env, {
+      store,
       timer: {
         setTimeout: () => "handle",
         clearTimeout: () => {}
@@ -182,11 +170,11 @@ describe("admin core endpoints", () => {
   });
 
   it("persists mutable runtime config patches and reloads them on restart", async () => {
-    const tempRoot = await createTempDir();
-    const stateDir = path.join(tempRoot, "state");
-    const env = createBaseEnv({ STATE_DIR: stateDir, BUY_CHANCE: "90" });
+    const store = new InMemoryStateStore();
+    const env = createBaseEnv({ BUY_CHANCE: "90" });
 
     const first = await createInitializedApp(env, {
+      store,
       timer: {
         setTimeout: () => "handle",
         clearTimeout: () => {}
@@ -213,6 +201,7 @@ describe("admin core endpoints", () => {
     await first.app.close();
 
     const second = await createInitializedApp(env, {
+      store,
       timer: {
         setTimeout: () => "handle",
         clearTimeout: () => {}

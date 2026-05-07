@@ -1,6 +1,6 @@
 import { randomBytes, randomUUID } from "node:crypto";
 import { BotRecord, BotsStateFile } from "../state/types.js";
-import { saveBotsState } from "../storage/bots-state-store.js";
+import type { StateStore } from "../storage/state-store.js";
 
 export type GenerateKeypairFn = () => {
   publicKey: string;
@@ -89,7 +89,7 @@ export function reconcileBotsToTarget(
 }
 
 export async function reconcileAndPersistBots(options: {
-  botsStatePath: string;
+  store: StateStore;
   botsState: BotsStateFile;
   targetCount: number;
   deps?: BotLifecycleDependencies;
@@ -97,14 +97,14 @@ export async function reconcileAndPersistBots(options: {
   const result = reconcileBotsToTarget(options.botsState, options.targetCount, options.deps);
 
   if (result.createdBots.length > 0) {
-    await saveBotsState(options.botsStatePath, result.updatedState);
+    await options.store.saveBotsState(result.updatedState);
   }
 
   return result;
 }
 
 export async function addBotsAndPersist(options: {
-  botsStatePath: string;
+  store: StateStore;
   botsState: BotsStateFile;
   count: number;
   deps?: BotLifecycleDependencies;
@@ -127,7 +127,7 @@ export async function addBotsAndPersist(options: {
     bots: [...options.botsState.bots, ...addedBots]
   };
 
-  await saveBotsState(options.botsStatePath, updatedState);
+  await options.store.saveBotsState(updatedState);
 
   return {
     updatedState,

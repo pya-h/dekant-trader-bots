@@ -1,25 +1,10 @@
-import { promises as fs } from "node:fs";
-import os from "node:os";
-import path from "node:path";
 import request from "supertest";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { DekantClient, DekantMarket, DekantPosition, SubmitTradeRequest } from "../../src/clients/dekant-client.js";
 import { MarketPriceResolution, PriceQuote } from "../../src/clients/price-client.js";
 import { createInitializedApp } from "../../src/server.js";
 import { createBaseEnv } from "../helpers/config.js";
-
-const tempRoots: string[] = [];
-
-async function createTempDir(): Promise<string> {
-  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "dtb-sell-e2e-"));
-  tempRoots.push(dir);
-  return dir;
-}
-
-afterEach(async () => {
-  await Promise.all(tempRoots.map((dir) => fs.rm(dir, { recursive: true, force: true })));
-  tempRoots.length = 0;
-});
+import { InMemoryStateStore } from "../helpers/memory-state-store.js";
 
 function createSellHarness(input: {
   markets: DekantMarket[];
@@ -91,10 +76,8 @@ function createSellHarness(input: {
 
 describe("sell engine integration", () => {
   it("forced sell endpoint acts only on bots that actually have positions", async () => {
-    const tempRoot = await createTempDir();
-    const stateDir = path.join(tempRoot, "state");
+    const store = new InMemoryStateStore();
     const env = createBaseEnv({
-      STATE_DIR: stateDir,
       BOT_COUNTS: "3",
       SELL_CHANCE: "100"
     });
@@ -105,6 +88,7 @@ describe("sell engine integration", () => {
     ];
 
     const appBoot = await createInitializedApp(env, {
+      store,
       timer: {
         setTimeout: () => "handle",
         clearTimeout: () => {}
@@ -123,6 +107,7 @@ describe("sell engine integration", () => {
     });
 
     const appCtx = await createInitializedApp(env, {
+      store,
       timer: {
         setTimeout: () => "handle",
         clearTimeout: () => {}
@@ -158,10 +143,8 @@ describe("sell engine integration", () => {
   });
 
   it("forced sell endpoint market_ids filter scopes sells to selected markets", async () => {
-    const tempRoot = await createTempDir();
-    const stateDir = path.join(tempRoot, "state");
+    const store = new InMemoryStateStore();
     const env = createBaseEnv({
-      STATE_DIR: stateDir,
       BOT_COUNTS: "2",
       SELL_CHANCE: "100"
     });
@@ -172,6 +155,7 @@ describe("sell engine integration", () => {
     ];
 
     const appBoot = await createInitializedApp(env, {
+      store,
       timer: {
         setTimeout: () => "handle",
         clearTimeout: () => {}
@@ -190,6 +174,7 @@ describe("sell engine integration", () => {
     });
 
     const appCtx = await createInitializedApp(env, {
+      store,
       timer: {
         setTimeout: () => "handle",
         clearTimeout: () => {}
@@ -222,10 +207,8 @@ describe("sell engine integration", () => {
   });
 
   it("non-position bots are skipped cleanly", async () => {
-    const tempRoot = await createTempDir();
-    const stateDir = path.join(tempRoot, "state");
+    const store = new InMemoryStateStore();
     const env = createBaseEnv({
-      STATE_DIR: stateDir,
       BOT_COUNTS: "4",
       SELL_CHANCE: "100"
     });
@@ -233,6 +216,7 @@ describe("sell engine integration", () => {
     const markets: DekantMarket[] = [{ id: "m1", subject: "BTC", category: "crypto", status: "open" }];
 
     const appBoot = await createInitializedApp(env, {
+      store,
       timer: {
         setTimeout: () => "handle",
         clearTimeout: () => {}
@@ -250,6 +234,7 @@ describe("sell engine integration", () => {
     });
 
     const appCtx = await createInitializedApp(env, {
+      store,
       timer: {
         setTimeout: () => "handle",
         clearTimeout: () => {}

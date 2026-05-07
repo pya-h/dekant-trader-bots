@@ -1,16 +1,12 @@
-import { promises as fs } from "node:fs";
-import os from "node:os";
-import path from "node:path";
 import request from "supertest";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { createInitializedApp } from "../../src/server.js";
 import { DekantClient, DekantMarket, DekantPosition, SubmitTradeRequest } from "../../src/clients/dekant-client.js";
 import { MarketPriceResolution, PriceQuote } from "../../src/clients/price-client.js";
 import { BotRecord } from "../../src/state/types.js";
 import { createBaseEnv } from "../helpers/config.js";
 import { createCapturedLogger } from "../helpers/observability.js";
-
-const tempRoots: string[] = [];
+import { InMemoryStateStore } from "../helpers/memory-state-store.js";
 
 type BalanceSnapshot = {
   sol: number;
@@ -24,17 +20,6 @@ type IntervalHarness = {
   };
   tick: () => Promise<void>;
 };
-
-async function createTempDir(): Promise<string> {
-  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "dtb-full-system-e2e-"));
-  tempRoots.push(dir);
-  return dir;
-}
-
-afterEach(async () => {
-  await Promise.all(tempRoots.map((dir) => fs.rm(dir, { recursive: true, force: true })));
-  tempRoots.length = 0;
-});
 
 function createIntervalHarness(): IntervalHarness {
   let intervalHandler: (() => void) | null = null;
@@ -61,8 +46,9 @@ function createIntervalHarness(): IntervalHarness {
   };
 }
 
-async function bootstrapBots(env: NodeJS.ProcessEnv): Promise<BotRecord[]> {
+async function bootstrapBots(env: NodeJS.ProcessEnv, store: InMemoryStateStore): Promise<BotRecord[]> {
   const appCtx = await createInitializedApp(env, {
+    store,
     timer: {
       setTimeout: () => "handle",
       clearTimeout: () => {}
@@ -247,17 +233,15 @@ function createFundingHarness(input: {
 
 describe("full system e2e", () => {
   it("golden path: bootstrap + scheduled loops + manual controls + funding fallback", async () => {
-    const tempRoot = await createTempDir();
-    const stateDir = path.join(tempRoot, "state");
+    const store = new InMemoryStateStore();
     const env = createBaseEnv({
-      STATE_DIR: stateDir,
       BOT_COUNTS: "3",
       BUY_CHANCE: "100",
       SELL_CHANCE: "100",
       MAX_AMOUNT: "40"
     });
 
-    const bots = await bootstrapBots(env);
+    const bots = await bootstrapBots(env, store);
 
     const markets: DekantMarket[] = [
       { id: "m1", subject: "BTC", category: "crypto", status: "open", liquidity: 300_000 },
@@ -288,6 +272,7 @@ describe("full system e2e", () => {
     const sellInterval = createIntervalHarness();
 
     const appCtx = await createInitializedApp(env, {
+      store,
       timer: {
         setTimeout: () => "handle",
         clearTimeout: () => {}
@@ -381,17 +366,15 @@ describe("full system e2e", () => {
   });
 
   it("stress path: many bots/markets with intermittent failures stays available", async () => {
-    const tempRoot = await createTempDir();
-    const stateDir = path.join(tempRoot, "state");
+    const store = new InMemoryStateStore();
     const env = createBaseEnv({
-      STATE_DIR: stateDir,
       BOT_COUNTS: "12",
       BUY_CHANCE: "100",
       SELL_CHANCE: "100",
       MAX_AMOUNT: "35"
     });
 
-    const bots = await bootstrapBots(env);
+    const bots = await bootstrapBots(env, store);
 
     const markets: DekantMarket[] = [
       { id: "m1", subject: "BTC", category: "crypto", status: "open", liquidity: 400_000 },
@@ -413,6 +396,7 @@ describe("full system e2e", () => {
     const capturedLogger = createCapturedLogger();
 
     const appCtx = await createInitializedApp(env, {
+      store,
       timer: {
         setTimeout: () => "handle",
         clearTimeout: () => {}
@@ -479,10 +463,8 @@ describe("full system e2e", () => {
   });
 
   it("restart path: persisted bots/config/ignored-markets reload correctly", async () => {
-    const tempRoot = await createTempDir();
-    const stateDir = path.join(tempRoot, "state");
+    const store = new InMemoryStateStore();
     const env = createBaseEnv({
-      STATE_DIR: stateDir,
       BOT_COUNTS: "2"
     });
 
@@ -500,6 +482,7 @@ describe("full system e2e", () => {
     };
 
     const first = await createInitializedApp(env, {
+      store,
       timer: {
         setTimeout: () => "handle",
         clearTimeout: () => {}
@@ -539,7 +522,7 @@ describe("full system e2e", () => {
 
     await first.app.close();
 
-    const bots = await bootstrapBots(env);
+    const bots = await bootstrapBots(env, store);
     const balancesByAddress = new Map<string, BalanceSnapshot>(
       bots.map((bot) => [
         bot.publicKey,
@@ -564,6 +547,7 @@ describe("full system e2e", () => {
     };
 
     const second = await createInitializedApp(env, {
+      store,
       timer: {
         setTimeout: () => "handle",
         clearTimeout: () => {}
