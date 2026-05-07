@@ -196,8 +196,8 @@ export class BuyEngine {
   private readonly dekantClient: DekantTradingClient;
   private readonly getBots: () => BotRecord[];
   private readonly getMarkets: () => BuyMarket[];
-  private readonly buyChance: number;
-  private readonly maxAmount: number;
+  private buyChance: number;
+  private maxAmount: number;
   private readonly intervalMs: number;
   private readonly random: () => number;
   private readonly now: () => Date;
@@ -270,6 +270,11 @@ export class BuyEngine {
         collateral: roundToFixed(state.collateral * 0.6)
       });
     }
+  }
+
+  updateRuntime(patch: { buyChance?: number; maxAmount?: number }): void {
+    if (patch.buyChance !== undefined) this.buyChance = patch.buyChance;
+    if (patch.maxAmount !== undefined) this.maxAmount = patch.maxAmount;
   }
 
   getSnapshot(): {

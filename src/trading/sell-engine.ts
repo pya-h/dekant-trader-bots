@@ -81,6 +81,7 @@ export type SellCycleAction = {
     | "skipped_missing_price"
     | "skipped_stale_price"
     | "skipped_no_reference"
+    | "skipped_invalid_amount"
     | "failed_submit";
   requestedSellAmount?: number;
   txId?: string;
@@ -109,6 +110,7 @@ export type SellCycleResult = {
   skippedMissingPriceCount: number;
   skippedStalePriceCount: number;
   skippedNoReferenceCount: number;
+  skippedInvalidAmountCount: number;
   failedSubmitCount: number;
   actions: SellCycleAction[];
 };
@@ -143,7 +145,7 @@ export class SellEngine {
   private readonly dekantClient: DekantSellingClient;
   private readonly getBots: () => BotRecord[];
   private readonly getMarkets: () => SellMarket[];
-  private readonly sellChance: number;
+  private sellChance: number;
   private readonly intervalMs: number;
   private readonly partialBiasPercent: number;
   private readonly random: () => number;
@@ -212,6 +214,10 @@ export class SellEngine {
     return "sell_submit_failed";
   }
 
+  updateRuntime(patch: { sellChance?: number }): void {
+    if (patch.sellChance !== undefined) this.sellChance = patch.sellChance;
+  }
+
   getSnapshot(): {
     isRunning: boolean;
     lastCycleAt: string | null;
@@ -255,6 +261,7 @@ export class SellEngine {
       skippedMissingPriceCount: 0,
       skippedStalePriceCount: 0,
       skippedNoReferenceCount: 0,
+      skippedInvalidAmountCount: 0,
       failedSubmitCount: 0,
       actions: []
     };
@@ -375,6 +382,7 @@ export class SellEngine {
       let skippedMissingPriceCount = 0;
       let skippedStalePriceCount = 0;
       let skippedNoReferenceCount = 0;
+      let skippedInvalidAmountCount = 0;
       let failedSubmitCount = 0;
 
       for (const bot of bots) {
@@ -482,13 +490,13 @@ export class SellEngine {
             mode === "partial" ? pickPartialSellAmount(position.amount, this.random) : roundToFixed(position.amount);
 
           if (requestedSellAmount <= 0) {
-            skippedNoReferenceCount += 1;
+            skippedInvalidAmountCount += 1;
             actions.push({
               botId: bot.id,
               marketId: position.marketId,
               token,
               positionId: position.id,
-              status: "skipped_no_reference"
+              status: "skipped_invalid_amount"
             });
             continue;
           }
@@ -564,6 +572,7 @@ export class SellEngine {
         skippedMissingPriceCount,
         skippedStalePriceCount,
         skippedNoReferenceCount,
+        skippedInvalidAmountCount,
         failedSubmitCount,
         actions
       };

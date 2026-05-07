@@ -122,7 +122,7 @@ export function selectFundingAmount(options: {
 }
 
 export class FundingEngine {
-  private readonly runtime: FundingEngineOptions["runtime"];
+  private runtime: FundingEngineOptions["runtime"];
   private readonly clients: FundingEngineOptions["clients"];
   private readonly now: () => Date;
   private readonly random: () => number;
@@ -136,6 +136,16 @@ export class FundingEngine {
     this.clients = options.clients;
     this.now = options.now ?? (() => new Date());
     this.random = options.random ?? Math.random;
+  }
+
+  updateRuntime(patch: Partial<FundingEngineOptions["runtime"]>): void {
+    this.runtime = {
+      ...this.runtime,
+      ...patch,
+      vaultSupportedTokens: patch.vaultSupportedTokens
+        ? unique(patch.vaultSupportedTokens.map(normalizeToken))
+        : this.runtime.vaultSupportedTokens
+    };
   }
 
   private isVaultSupportedToken(token: string): boolean {

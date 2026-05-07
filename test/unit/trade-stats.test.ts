@@ -93,6 +93,7 @@ describe("TradeStatsStore", () => {
       skippedMissingPriceCount: 0,
       skippedStalePriceCount: 0,
       skippedNoReferenceCount: 0,
+      skippedInvalidAmountCount: 0,
       failedSubmitCount: 1,
       actions: [
         {
