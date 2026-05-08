@@ -1,0 +1,172 @@
+@baseUrl = http://localhost:3001
+@adminSecret = replace-with-strong-secret
+
+### Health Check
+GET {{baseUrl}}/health
+
+###
+
+### ----- ADMIN ENDPOINTS (require x-security header) -----
+
+### Status (health, observability, runtime snapshot)
+GET {{baseUrl}}/admin/status
+x-security: {{adminSecret}}
+
+###
+
+### Stats (trade statistics, paginated)
+GET {{baseUrl}}/admin/stats?page=1&page_size=10
+x-security: {{adminSecret}}
+
+###
+
+### Bot Balances (paginated)
+GET {{baseUrl}}/admin/bots/balances?page=1&page_size=10
+x-security: {{adminSecret}}
+
+###
+
+### ----- TRADING -----
+
+### Force Buy Cycle (all markets)
+POST {{baseUrl}}/admin/bots/buy
+x-security: {{adminSecret}}
+Content-Type: application/json
+
+{}
+
+###
+
+### Force Buy Cycle (specific markets)
+POST {{baseUrl}}/admin/bots/buy
+x-security: {{adminSecret}}
+Content-Type: application/json
+
+{
+  "market_ids": ["market-id-here"]
+}
+
+###
+
+### Force Sell Cycle (all markets)
+POST {{baseUrl}}/admin/bots/sell
+x-security: {{adminSecret}}
+Content-Type: application/json
+
+{}
+
+###
+
+### Force Sell Cycle (specific markets)
+POST {{baseUrl}}/admin/bots/sell
+x-security: {{adminSecret}}
+Content-Type: application/json
+
+{
+  "market_ids": ["market-id-here"]
+}
+
+###
+
+### ----- BOT MANAGEMENT -----
+
+### Add Bots
+POST {{baseUrl}}/admin/bots/add
+x-security: {{adminSecret}}
+Content-Type: application/json
+
+{
+  "count": 1
+}
+
+###
+
+### Manual Fund (all bots, default token)
+POST {{baseUrl}}/admin/bots/fund
+x-security: {{adminSecret}}
+Content-Type: application/json
+
+{}
+
+###
+
+### Manual Fund (specific bots, specific token and amount)
+POST {{baseUrl}}/admin/bots/fund
+x-security: {{adminSecret}}
+Content-Type: application/json
+
+{
+  "bot_ids": ["bot-id-here"],
+  "amount": 100,
+  "token": "USDT"
+}
+
+###
+
+### ----- MARKET CONTROL -----
+
+### Add Ignored Markets
+POST {{baseUrl}}/admin/markets/ignored/add
+x-security: {{adminSecret}}
+Content-Type: application/json
+
+{
+  "market_ids": ["market-id-to-ignore"]
+}
+
+###
+
+### Remove Ignored Markets
+POST {{baseUrl}}/admin/markets/ignored/remove
+x-security: {{adminSecret}}
+Content-Type: application/json
+
+{
+  "market_ids": ["market-id-to-unignore"]
+}
+
+###
+
+### ----- RUNTIME CONFIG -----
+
+### Update Trading Config
+PATCH {{baseUrl}}/admin/config
+x-security: {{adminSecret}}
+Content-Type: application/json
+
+{
+  "trading": {
+    "buyChance": 90,
+    "sellChance": 35,
+    "maxAmount": 1000,
+    "prefundMultiplier": 10
+  }
+}
+
+###
+
+### Update Funding Config
+PATCH {{baseUrl}}/admin/config
+x-security: {{adminSecret}}
+Content-Type: application/json
+
+{
+  "funding": {
+    "emergencyTopupCooldownMs": 60000,
+    "minBotSol": 0.01,
+    "vaultSupportedTokens": ["USDT", "USDC"]
+  }
+}
+
+###
+
+### Update Price Policy
+PATCH {{baseUrl}}/admin/config
+x-security: {{adminSecret}}
+Content-Type: application/json
+
+{
+  "price": {
+    "stalePricePolicy": "skip"
+  }
+}
