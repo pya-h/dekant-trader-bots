@@ -37,7 +37,7 @@ const envSchema = z.object({
   MAX_AMOUNT: z.coerce.number().positive().default(1_000),
   PREFUND_MULTIPLIER: z.coerce.number().positive().default(10),
   EMERGENCY_TOPUP_COOLDOWN_MS: z.coerce.number().int().positive().default(300_000),
-  MIN_BOT_SOL: z.coerce.number().positive().default(0.01),
+  MIN_BOT_SOL: z.coerce.number().positive().default(0.1),
   VAULT_MINT_ALLOWLIST: z.string().default(""),
   STALE_PRICE_POLICY: z.enum(["skip", "allow"]).default("skip"),
   PRICE_REQUEST_TIMEOUT_MS: z.coerce.number().int().positive().default(5_000),
