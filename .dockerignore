@@ -10,3 +10,4 @@ state/*.json
 !state/.gitkeep
 test
 docs
+.claude
