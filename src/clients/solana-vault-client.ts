@@ -1,10 +1,10 @@
 import {
+  ComputeBudgetProgram,
   Connection,
   Keypair,
   PublicKey,
   SystemProgram,
-  Transaction,
-  sendAndConfirmTransaction
+  Transaction
 } from "@solana/web3.js";
 import {
   createAssociatedTokenAccountInstruction,
@@ -23,6 +23,8 @@ export type SolanaVaultClientOptions = {
   connection: Connection;
   vaultKeypair: Keypair;
   mintRegistry: MintRegistry;
+  /** micro-lamports per CU. Default 1000. */
+  priorityFeeMicroLamports?: number;
 };
 
 export function loadKeypairFromSecret(raw: string): Keypair {
@@ -45,11 +47,35 @@ export class SolanaVaultClient implements VaultClient {
   private readonly connection: Connection;
   private readonly vaultKeypair: Keypair;
   private readonly mintRegistry: MintRegistry;
+  private readonly priorityFeeMicroLamports: number;
 
   constructor(options: SolanaVaultClientOptions) {
     this.connection = options.connection;
     this.vaultKeypair = options.vaultKeypair;
     this.mintRegistry = options.mintRegistry;
+    this.priorityFeeMicroLamports = options.priorityFeeMicroLamports ?? 1000;
+  }
+
+  private priorityFeeIx() {
+    return ComputeBudgetProgram.setComputeUnitPrice({
+      microLamports: this.priorityFeeMicroLamports
+    });
+  }
+
+  private async sendWithBlockhash(tx: Transaction): Promise<string> {
+    const { blockhash, lastValidBlockHeight } = await this.connection.getLatestBlockhash("confirmed");
+    tx.recentBlockhash = blockhash;
+    tx.lastValidBlockHeight = lastValidBlockHeight;
+    tx.feePayer = this.vaultKeypair.publicKey;
+    tx.sign(this.vaultKeypair);
+    const signature = await this.connection.sendRawTransaction(tx.serialize(), {
+      skipPreflight: false
+    });
+    await this.connection.confirmTransaction(
+      { signature, blockhash, lastValidBlockHeight },
+      "confirmed"
+    );
+    return signature;
   }
 
   async transferSol(input: { toAddress: string; amount: number }): Promise<{ txId: string }> {
@@ -59,19 +85,17 @@ export class SolanaVaultClient implements VaultClient {
       throw new Error("transfer_sol_amount_must_be_positive");
     }
 
-    const transaction = new Transaction().add(
-      SystemProgram.transfer({
-        fromPubkey: this.vaultKeypair.publicKey,
-        toPubkey,
-        lamports
-      })
-    );
+    const transaction = new Transaction()
+      .add(this.priorityFeeIx())
+      .add(
+        SystemProgram.transfer({
+          fromPubkey: this.vaultKeypair.publicKey,
+          toPubkey,
+          lamports
+        })
+      );
 
-    const signature = await sendAndConfirmTransaction(this.connection, transaction, [this.vaultKeypair], {
-      commitment: "confirmed"
-    });
-
-    return { txId: signature };
+    return { txId: await this.sendWithBlockhash(transaction) };
   }
 
   async transferToken(input: { token: string; toAddress: string; amount: number }): Promise<{ txId: string }> {
@@ -86,7 +110,7 @@ export class SolanaVaultClient implements VaultClient {
     const fromAta = await getAssociatedTokenAddress(mint, this.vaultKeypair.publicKey);
     const toAta = await getAssociatedTokenAddress(mint, recipient);
 
-    const transaction = new Transaction();
+    const transaction = new Transaction().add(this.priorityFeeIx());
 
     let recipientAtaExists = true;
     try {
@@ -121,10 +145,6 @@ export class SolanaVaultClient implements VaultClient {
       )
     );
 
-    const signature = await sendAndConfirmTransaction(this.connection, transaction, [this.vaultKeypair], {
-      commitment: "confirmed"
-    });
-
-    return { txId: signature };
+    return { txId: await this.sendWithBlockhash(transaction) };
   }
 }
