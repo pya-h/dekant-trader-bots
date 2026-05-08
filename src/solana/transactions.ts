@@ -36,11 +36,42 @@ export class OutOfRangeError extends Error {
 
 export class SimulationError extends Error {
   readonly logs?: string[];
-  constructor(message: string, logs?: string[]) {
+  readonly anchorAccount?: string;
+  readonly anchorErrorCode?: string;
+  readonly anchorErrorNumber?: number;
+  constructor(
+    message: string,
+    logs?: string[],
+    anchor?: { account?: string; code?: string; number?: number }
+  ) {
     super(message);
     this.name = "SimulationError";
     this.logs = logs;
+    this.anchorAccount = anchor?.account;
+    this.anchorErrorCode = anchor?.code;
+    this.anchorErrorNumber = anchor?.number;
   }
+}
+
+function parseAnchorError(logs: string[] | null | undefined): {
+  account?: string;
+  code?: string;
+  number?: number;
+  message?: string;
+} {
+  if (!logs) return {};
+  const out: { account?: string; code?: string; number?: number; message?: string } = {};
+  for (const line of logs) {
+    const acc = line.match(/AnchorError caused by account:\s*([A-Za-z0-9_]+)/);
+    if (acc) out.account = acc[1];
+    const code = line.match(/Error Code:\s*([A-Za-z0-9_]+)/);
+    if (code) out.code = code[1];
+    const num = line.match(/Error Number:\s*(\d+)/);
+    if (num) out.number = Number(num[1]);
+    const msg = line.match(/Error Message:\s*(.+?)\.?$/);
+    if (msg) out.message = msg[1];
+  }
+  return out;
 }
 
 function getAta(mint: PublicKey, owner: PublicKey): PublicKey {
@@ -131,10 +162,15 @@ async function simulateOrThrow(
   try {
     const sim = await provider.connection.simulateTransaction(tx, undefined);
     if (sim.value.err) {
-      throw new SimulationError(
-        `simulate_failed:${JSON.stringify(sim.value.err)}`,
-        sim.value.logs ?? undefined
-      );
+      const logs = sim.value.logs ?? undefined;
+      const anchor = parseAnchorError(logs);
+      const parts = [`simulate_failed:${JSON.stringify(sim.value.err)}`];
+      if (anchor.code) {
+        parts.push(`anchor=${anchor.code}${anchor.number !== undefined ? `(${anchor.number})` : ""}`);
+      }
+      if (anchor.account) parts.push(`account=${anchor.account}`);
+      if (anchor.message) parts.push(`reason="${anchor.message}"`);
+      throw new SimulationError(parts.join(" "), logs, anchor);
     }
   } catch (error) {
     if (error instanceof SimulationError) throw error;
