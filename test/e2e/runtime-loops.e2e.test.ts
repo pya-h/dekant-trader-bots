@@ -5,6 +5,26 @@ import { createBaseEnv } from "../helpers/config.js";
 import { DekantClient, DekantMarket } from "../../src/clients/dekant-client.js";
 import { MarketPriceResolution, PriceQuote } from "../../src/clients/price-client.js";
 import { InMemoryStateStore } from "../helpers/memory-state-store.js";
+import { bootstrapState } from "../../src/bootstrap.js";
+
+async function primeStoreWithMints(
+  env: NodeJS.ProcessEnv,
+  store: InMemoryStateStore,
+  mints: string[]
+): Promise<void> {
+  // Run bootstrap once so the store has a runtime_config we can patch in-place.
+  // Then seed vaultSupportedMints (formerly env-driven, now market-discovered).
+  await bootstrapState(env, store);
+  const existing = await store.loadRuntimeConfig();
+  if (!existing) return;
+  await store.saveRuntimeConfig({
+    ...existing,
+    config: {
+      ...existing.config,
+      funding: { ...existing.config.funding, vaultSupportedMints: mints }
+    }
+  });
+}
 
 type BalanceSnapshot = {
   sol: number;
@@ -101,8 +121,10 @@ describe("runtime loops", () => {
     const balancesByAddress = new Map<string, BalanceSnapshot>();
     const harness = makeFundingHarness(balancesByAddress);
 
+    const store = new InMemoryStateStore();
+    await primeStoreWithMints(env, store, ["USDT", "USDC"]);
     const appCtx = await createInitializedApp(env, {
-      store: new InMemoryStateStore(),
+      store,
       timer: {
         setTimeout: (handler: () => void) => {
           scheduledTimeout = handler;
@@ -231,8 +253,10 @@ describe("runtime loops", () => {
     const balancesByAddress = new Map<string, BalanceSnapshot>();
     const harness = makeFundingHarness(balancesByAddress);
 
+    const store = new InMemoryStateStore();
+    await primeStoreWithMints(env, store, ["USDT", "USDC"]);
     const appCtx = await createInitializedApp(env, {
-      store: new InMemoryStateStore(),
+      store,
       timer: {
         setTimeout: () => "timeout",
         clearTimeout: () => {}

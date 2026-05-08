@@ -4,6 +4,24 @@ import { BotRecord } from "../../src/state/types.js";
 import { createBaseEnv } from "../helpers/config.js";
 import { InMemoryStateStore } from "../helpers/memory-state-store.js";
 
+async function seedSupportedMints(store: InMemoryStateStore, mints: string[]): Promise<void> {
+  // VAULT_SUPPORTED_MINTS env was removed: the runtime now derives the set
+  // from market discovery. Tests that don't run market discovery have to seed
+  // it directly via the store. Must be called after a prior createInitializedApp
+  // run has populated runtime_config.
+  const existing = await store.loadRuntimeConfig();
+  if (!existing) {
+    throw new Error("seedSupportedMints requires runtime_config to exist");
+  }
+  await store.saveRuntimeConfig({
+    ...existing,
+    config: {
+      ...existing.config,
+      funding: { ...existing.config.funding, vaultSupportedMints: mints }
+    }
+  });
+}
+
 type BalanceSnapshot = {
   sol: number;
   tokens: Record<string, number>;
@@ -141,6 +159,8 @@ describe("funding engine integration", () => {
 
     const { harness, deps } = buildFundingHarness(appCtx.state.botsState.bots, 0, { USDT: 0, USDC: 0 });
 
+    await seedSupportedMints(store, ["USDT", "USDC"]);
+
     const withFunding = await createInitializedApp(env, {
       store,
       timer: {
@@ -176,6 +196,8 @@ describe("funding engine integration", () => {
     });
 
     const { harness, deps } = buildFundingHarness(initialized.state.botsState.bots, 0, { USDT: 0, USDC: 0 });
+
+    await seedSupportedMints(store, ["USDT", "USDC"]);
 
     const withFunding = await createInitializedApp(env, {
       store,

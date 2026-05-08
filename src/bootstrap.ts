@@ -54,7 +54,9 @@ export function makeInitialRuntimeConfig(envConfig: EnvConfig): RuntimeConfigFil
       funding: {
         emergencyTopupCooldownMs: envConfig.runtimeDefaults.emergencyTopupCooldownMs,
         minBotSol: envConfig.runtimeDefaults.minBotSol,
-        vaultSupportedMints: envConfig.runtimeDefaults.vaultSupportedMints
+        // vaultSupportedMints is fully runtime-managed: discovered from /markets,
+        // optionally narrowed by VAULT_MINT_ALLOWLIST at sync time.
+        vaultSupportedMints: []
       },
       price: {
         stalePricePolicy: envConfig.runtimeDefaults.stalePricePolicy
