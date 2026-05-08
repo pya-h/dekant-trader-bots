@@ -1260,7 +1260,10 @@ async function start(): Promise<void> {
   process.on("SIGINT", () => void shutdown("SIGINT"));
 
   await appCtx.markets?.start({ immediate: true });
-  await appCtx.funding?.start({ immediate: false });
+  // If a fresh-bot initial-funding flow is scheduled it will handle the first
+  // topup. Otherwise (e.g. restart with existing bots) prefund immediately so
+  // the first buy cycle isn't kicked off against zero collateral.
+  await appCtx.funding?.start({ immediate: !appCtx.startup.initialFundingScheduled });
 
   // Hold buy/sell loops until initial funding has had time to land on-chain.
   // Without this, the first cycle fires before bots have any collateral.
