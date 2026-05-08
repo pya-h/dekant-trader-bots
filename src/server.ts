@@ -13,7 +13,13 @@ import type { BotRecord } from "./state/types.js";
 import { PriceClient } from "./clients/price-client.js";
 import { loadKeypairFromSecret, SolanaVaultClient } from "./clients/solana-vault-client.js";
 import { SolanaBalanceClient } from "./clients/solana-balance-client.js";
-import { BalanceClient, FundingEngine, ManualFundRequest, VaultClient } from "./funding/engine.js";
+import {
+  BalanceClient,
+  FundingEngine,
+  ManualFundRequest,
+  VaultClient,
+  summarizePrefundResult
+} from "./funding/engine.js";
 import { MarketCache } from "./markets/cache.js";
 import { MintRegistry } from "./clients/mint-registry.js";
 import { runtimeConfigSchema } from "./state/types.js";
@@ -673,7 +679,10 @@ export async function createInitializedApp(
     try {
       const result = await fundingEngine.prefundBots(state.botsState.bots);
       runtimeMonitor.recordJobSuccess("manual_fund");
-      safeInfo(logger, "prefund_cycle_completed", { source });
+      safeInfo(logger, "prefund_cycle_completed", {
+        source,
+        ...summarizePrefundResult(result)
+      });
       return result;
     } catch (error) {
       trackAndLogFailure({
