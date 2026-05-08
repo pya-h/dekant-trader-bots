@@ -373,7 +373,7 @@ describe("full system e2e", () => {
 
     expect(dekant.submitBuyCalls.length).toBeGreaterThan(0);
     expect(dekant.submitSellCalls.length).toBeGreaterThan(0);
-    expect(capturedLogger.entries).toHaveLength(0);
+    expect(capturedLogger.getByLevel("error")).toHaveLength(0);
 
     await appCtx.buy!.stop();
     await appCtx.sell!.stop();
@@ -467,7 +467,8 @@ describe("full system e2e", () => {
       buyAll.body.cycle.failedSubmitCount + sellScoped.body.cycle.failedSubmitCount
     );
 
-    const errorEvents = capturedLogger.getEvents();
+    const errorEntries = capturedLogger.getByLevel("error");
+    const errorEvents = errorEntries.map((e) => e.event);
     expect(capturedLogger.getByEvent("buy_action_failed")).toHaveLength(buyAll.body.cycle.failedSubmitCount);
     expect(capturedLogger.getByEvent("sell_action_failed")).toHaveLength(sellScoped.body.cycle.failedSubmitCount);
     expect(errorEvents.every((event) => event === "buy_action_failed" || event === "sell_action_failed")).toBe(true);

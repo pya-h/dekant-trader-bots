@@ -2,17 +2,21 @@ import { pathToFileURL } from "node:url";
 import dotenv from "dotenv";
 import { buildApp } from "./app.js";
 import { bootstrapState } from "./bootstrap.js";
-import { buildAppConfig } from "./config.js";
+import { buildAppConfig, loadEnvConfig } from "./config.js";
 import { scheduleInitialFundingIfNeeded, TimerProvider } from "./bots/initial-funding.js";
 import { addBotsAndPersist, BotLifecycleDependencies, reconcileAndPersistBots } from "./bots/lifecycle.js";
-import { FaucetClient } from "./clients/faucet-client.js";
-import { DekantClient } from "./clients/dekant-client.js";
+import { HttpBalanceClient } from "./clients/balance-client.js";
+import { FaucetClient, HttpFaucetClient } from "./clients/faucet-client.js";
+import { DekantClient, HttpDekantClient } from "./clients/dekant-client.js";
+import { HttpVaultClient } from "./clients/vault-client.js";
+import { PriceClient } from "./clients/price-client.js";
 import { BalanceClient, FundingEngine, ManualFundRequest, VaultClient } from "./funding/engine.js";
 import { MarketCache } from "./markets/cache.js";
 import { runtimeConfigSchema } from "./state/types.js";
 import { saveRuntimeConfig } from "./storage/runtime-config-store.js";
 import { TradeStatsStore } from "./metrics/trade-stats.js";
 import { classifyError } from "./observability/errors.js";
+import { Logger, createLogger } from "./observability/logger.js";
 import { MonitoredJob, RuntimeMonitor } from "./observability/runtime-monitor.js";
 import {
   BuyEngine,
@@ -31,9 +35,7 @@ import {
 
 dotenv.config({ quiet: true });
 
-type StructuredLogger = {
-  error(event: string, fields: Record<string, unknown>): void;
-};
+type StructuredLogger = Logger;
 
 type LoopIntervalProvider = {
   setInterval(handler: () => void, intervalMs: number): unknown;
@@ -46,18 +48,7 @@ const defaultLoopIntervalProvider: LoopIntervalProvider = {
 };
 
 function makeDefaultLogger(now: () => Date): StructuredLogger {
-  return {
-    error(event: string, fields: Record<string, unknown>) {
-      console.error(
-        JSON.stringify({
-          timestamp: now().toISOString(),
-          level: "error",
-          event,
-          ...fields
-        })
-      );
-    }
-  };
+  return createLogger({ now });
 }
 
 export type AppInitializationOptions = {
@@ -178,7 +169,15 @@ export async function createInitializedApp(
   const logger = options.observability?.logger ?? makeDefaultLogger(now);
   const runtimeMonitor = new RuntimeMonitor({ now });
 
+  logger.info("bootstrap_start", { stateDir: env.STATE_DIR ?? "state" });
   const { envConfig, state } = await bootstrapState(env);
+  logger.info("bootstrap_complete", {
+    botFleet: envConfig.botFleet,
+    intervals: envConfig.intervals,
+    runtimeDefaults: envConfig.runtimeDefaults,
+    existingBots: state.botsState.bots.length
+  });
+
   const reconciliation = await reconcileAndPersistBots({
     botsStatePath: state.files.botsStatePath,
     botsState: state.botsState,
@@ -186,6 +185,14 @@ export async function createInitializedApp(
     deps: options.botLifecycleDeps
   });
   state.botsState = reconciliation.updatedState;
+
+  logger.info("bot_reconciliation_complete", {
+    targetCount: envConfig.botFleet.initialBotCount,
+    existingBots: reconciliation.hadExistingBots ? state.botsState.bots.length - reconciliation.createdBots.length : 0,
+    createdBots: reconciliation.createdBots.length,
+    totalBots: state.botsState.bots.length,
+    botIds: state.botsState.bots.map((b) => b.id)
+  });
 
   const config = buildAppConfig(envConfig, state.runtimeConfig);
   const marketCache = options.marketCache
@@ -400,35 +407,66 @@ export async function createInitializedApp(
       throw new Error("buy_engine_unavailable");
     }
 
+    const source = input.source ?? "manual";
+    logger.info("buy_cycle_start", { source, marketIds: input.marketIds ?? "all" });
     runtimeMonitor.recordJobStart("buy_cycle");
 
     try {
       const cycle = await buyEngine.runCycle({
-        source: input.source ?? "manual",
+        source,
         marketIds: input.marketIds
       });
       statsStore.ingestBuyCycle(cycle);
 
       for (const action of cycle.actions) {
-        if (action.status !== "failed_submit") {
-          continue;
-        }
-
-        trackAndLogActionFailure({
-          monitor: runtimeMonitor,
-          logger,
-          job: "buy_cycle",
-          error: action.error ?? "buy_submit_failed",
-          event: "buy_action_failed",
-          context: {
-            cycleType: "buy",
-            source: cycle.source,
+        if (action.status === "submitted") {
+          logger.info("buy_submitted", {
             botId: action.botId,
             marketId: action.marketId,
-            token: action.token
-          }
-        });
+            token: action.token,
+            collateralAmount: action.collateralAmount,
+            center: action.center,
+            spread: action.spread,
+            txId: action.txId
+          });
+        } else if (action.status === "failed_submit") {
+          trackAndLogActionFailure({
+            monitor: runtimeMonitor,
+            logger,
+            job: "buy_cycle",
+            error: action.error ?? "buy_submit_failed",
+            event: "buy_action_failed",
+            context: {
+              cycleType: "buy",
+              source: cycle.source,
+              botId: action.botId,
+              marketId: action.marketId,
+              token: action.token
+            }
+          });
+        } else {
+          logger.debug("buy_action_skipped", {
+            botId: action.botId,
+            marketId: action.marketId,
+            token: action.token,
+            status: action.status
+          });
+        }
       }
+
+      logger.info("buy_cycle_complete", {
+        cycleId: cycle.cycleId,
+        source: cycle.source,
+        totalBots: cycle.totalBots,
+        totalMarkets: cycle.totalMarkets,
+        selectedMarkets: cycle.selectedMarkets,
+        submitted: cycle.submittedCount,
+        skippedChance: cycle.skippedChanceCount,
+        skippedMissingPrice: cycle.skippedMissingPriceCount,
+        skippedStalePrice: cycle.skippedStalePriceCount,
+        failedSubmit: cycle.failedSubmitCount,
+        duration: `${new Date(cycle.finishedAt).getTime() - new Date(cycle.startedAt).getTime()}ms`
+      });
 
       runtimeMonitor.recordJobSuccess("buy_cycle");
       return cycle;
@@ -441,7 +479,7 @@ export async function createInitializedApp(
         event: "buy_cycle_failed",
         context: {
           cycleType: "buy",
-          source: input.source ?? "manual"
+          source
         }
       });
       throw error;
@@ -453,35 +491,68 @@ export async function createInitializedApp(
       throw new Error("sell_engine_unavailable");
     }
 
+    const source = input.source ?? "manual";
+    logger.info("sell_cycle_start", { source, marketIds: input.marketIds ?? "all" });
     runtimeMonitor.recordJobStart("sell_cycle");
 
     try {
       const cycle = await sellEngine.runCycle({
-        source: input.source ?? "manual",
+        source,
         marketIds: input.marketIds
       });
       statsStore.ingestSellCycle(cycle);
 
       for (const action of cycle.actions) {
-        if (action.status !== "failed_submit") {
-          continue;
-        }
-
-        trackAndLogActionFailure({
-          monitor: runtimeMonitor,
-          logger,
-          job: "sell_cycle",
-          error: action.error ?? "sell_submit_failed",
-          event: "sell_action_failed",
-          context: {
-            cycleType: "sell",
-            source: cycle.source,
+        if (action.status === "sold_full" || action.status === "sold_partial") {
+          logger.info("sell_submitted", {
             botId: action.botId,
             marketId: action.marketId,
-            token: action.token
-          }
-        });
+            token: action.token,
+            positionId: action.positionId,
+            mode: action.status === "sold_full" ? "full" : "partial",
+            requestedSellAmount: action.requestedSellAmount,
+            txId: action.txId
+          });
+        } else if (action.status === "failed_submit") {
+          trackAndLogActionFailure({
+            monitor: runtimeMonitor,
+            logger,
+            job: "sell_cycle",
+            error: action.error ?? "sell_submit_failed",
+            event: "sell_action_failed",
+            context: {
+              cycleType: "sell",
+              source: cycle.source,
+              botId: action.botId,
+              marketId: action.marketId,
+              token: action.token
+            }
+          });
+        } else {
+          logger.debug("sell_action_skipped", {
+            botId: action.botId,
+            marketId: action.marketId,
+            token: action.token,
+            positionId: action.positionId,
+            status: action.status
+          });
+        }
       }
+
+      logger.info("sell_cycle_complete", {
+        cycleId: cycle.cycleId,
+        source: cycle.source,
+        totalBots: cycle.totalBots,
+        botsWithPositions: cycle.botsWithPositions,
+        botsWithoutPositions: cycle.botsWithoutPositions,
+        positionsConsidered: cycle.positionsConsidered,
+        soldFull: cycle.soldFullCount,
+        soldPartial: cycle.soldPartialCount,
+        skippedInRange: cycle.skippedInRangeCount,
+        skippedChance: cycle.skippedChanceCount,
+        failedSubmit: cycle.failedSubmitCount,
+        duration: `${new Date(cycle.finishedAt).getTime() - new Date(cycle.startedAt).getTime()}ms`
+      });
 
       runtimeMonitor.recordJobSuccess("sell_cycle");
       return cycle;
@@ -494,7 +565,7 @@ export async function createInitializedApp(
         event: "sell_cycle_failed",
         context: {
           cycleType: "sell",
-          source: input.source ?? "manual"
+          source
         }
       });
       throw error;
@@ -506,10 +577,18 @@ export async function createInitializedApp(
       throw new Error("market_cache_unavailable");
     }
 
+    logger.info("market_refresh_start");
     runtimeMonitor.recordJobStart("market_refresh");
     const result = await marketCache.refresh();
     if (result.updated) {
       runtimeMonitor.recordJobSuccess("market_refresh");
+      const snapshot = marketCache.getSnapshot();
+      logger.info("market_refresh_complete", {
+        eligibleMarkets: result.count,
+        ignoredMarkets: snapshot.ignoredMarketIds.length,
+        marketIds: snapshot.markets.map((m) => m.id),
+        marketSubjects: snapshot.markets.map((m) => m.subject)
+      });
     } else {
       trackAndLogFailure({
         monitor: runtimeMonitor,
@@ -534,6 +613,13 @@ export async function createInitializedApp(
       throw new Error("funding_unavailable");
     }
 
+    logger.info("manual_fund_start", {
+      source,
+      botIds: input.botIds ?? "all",
+      addresses: input.addresses,
+      amount: input.amount,
+      token: input.token
+    });
     runtimeMonitor.recordJobStart("manual_fund");
     try {
       const result = await fundingEngine.manualFund({
@@ -541,6 +627,30 @@ export async function createInitializedApp(
         ...input
       });
       runtimeMonitor.recordJobSuccess("manual_fund");
+
+      for (const botResult of result.results) {
+        logger.info("fund_bot_result", {
+          source,
+          botId: botResult.botId,
+          address: botResult.address,
+          sol: botResult.sol,
+          tokenActions: botResult.tokenActions.map((a) => ({
+            token: a.token,
+            source: a.source,
+            status: a.status,
+            amount: a.amount,
+            txId: a.txId,
+            reason: a.reason
+          }))
+        });
+      }
+
+      logger.info("manual_fund_complete", {
+        source,
+        targetBots: result.targetBotIds.length,
+        results: result.results.length
+      });
+
       return result;
     } catch (error) {
       trackAndLogFailure({
@@ -562,10 +672,33 @@ export async function createInitializedApp(
       throw new Error("funding_unavailable");
     }
 
+    logger.info("prefund_cycle_start", {
+      source,
+      botCount: state.botsState.bots.length
+    });
     runtimeMonitor.recordJobStart("manual_fund");
     try {
       const result = await fundingEngine.prefundBots(state.botsState.bots);
       runtimeMonitor.recordJobSuccess("manual_fund");
+
+      for (const botResult of result.results) {
+        logger.info("prefund_bot_result", {
+          botId: botResult.botId,
+          sol: botResult.sol,
+          tokenActions: botResult.tokenActions.map((a) => ({
+            token: a.token,
+            source: a.source,
+            status: a.status,
+            amount: a.amount
+          }))
+        });
+      }
+
+      logger.info("prefund_cycle_complete", {
+        source,
+        targetBots: result.targetBotIds.length
+      });
+
       return result;
     } catch (error) {
       trackAndLogFailure({
@@ -588,6 +721,11 @@ export async function createInitializedApp(
     delayMs: envConfig.intervals.initialFundingDelayMs,
     timer: options.timer,
     trigger: async (context) => {
+      logger.info("initial_funding_triggered", {
+        createdBots: context.createdBots.length,
+        delayMs: context.delayMs,
+        botIds: context.createdBots.map((bot) => bot.id)
+      });
       runtimeMonitor.recordJobStart("initial_funding");
       try {
         if (options.onInitialFundingRequested) {
@@ -602,9 +740,12 @@ export async function createInitializedApp(
             },
             "initial_funding"
           );
+        } else {
+          logger.warn("initial_funding_skipped", { reason: "no_funding_engine" });
         }
 
         runtimeMonitor.recordJobSuccess("initial_funding");
+        logger.info("initial_funding_complete", { createdBots: context.createdBots.length });
       } catch (error) {
         trackAndLogFailure({
           monitor: runtimeMonitor,
@@ -629,6 +770,18 @@ export async function createInitializedApp(
     }
   });
 
+  if (fundingSchedule.scheduled) {
+    logger.info("initial_funding_scheduled", {
+      delayMs: fundingSchedule.delayMs,
+      createdBots: reconciliation.createdBots.length
+    });
+  } else {
+    logger.info("initial_funding_not_needed", {
+      hadExistingBots: reconciliation.hadExistingBots,
+      createdBots: reconciliation.createdBots.length
+    });
+  }
+
   const marketLoopTimer = options.marketCache?.timer ?? defaultLoopIntervalProvider;
   const buyLoopTimer = options.buy?.timer ?? defaultLoopIntervalProvider;
   const sellLoopTimer = options.sell?.timer ?? defaultLoopIntervalProvider;
@@ -644,6 +797,7 @@ export async function createInitializedApp(
       return;
     }
 
+    logger.info("market_loop_starting", { intervalMs: config.intervals.marketRefreshMs, immediate: options.immediate !== false });
     if (options.immediate !== false) {
       await runMarketRefresh().catch(() => {});
     }
@@ -651,6 +805,7 @@ export async function createInitializedApp(
     marketLoopHandle = marketLoopTimer.setInterval(() => {
       void runMarketRefresh().catch(() => {});
     }, config.intervals.marketRefreshMs);
+    logger.info("market_loop_started", { intervalMs: config.intervals.marketRefreshMs });
   };
 
   const stopMarketLoop = () => {
@@ -659,6 +814,7 @@ export async function createInitializedApp(
     }
     marketLoopTimer.clearInterval(marketLoopHandle);
     marketLoopHandle = null;
+    logger.info("market_loop_stopped");
   };
 
   const startBuyLoop = async (options: { immediate?: boolean } = {}) => {
@@ -666,6 +822,7 @@ export async function createInitializedApp(
       return;
     }
 
+    logger.info("buy_loop_starting", { intervalMs: config.intervals.buyMs, immediate: options.immediate !== false });
     if (options.immediate !== false) {
       await runBuyCycle({ source: "scheduled" }).catch(() => {});
     }
@@ -673,6 +830,7 @@ export async function createInitializedApp(
     buyLoopHandle = buyLoopTimer.setInterval(() => {
       void runBuyCycle({ source: "scheduled" }).catch(() => {});
     }, config.intervals.buyMs);
+    logger.info("buy_loop_started", { intervalMs: config.intervals.buyMs });
   };
 
   const stopBuyLoop = () => {
@@ -681,6 +839,7 @@ export async function createInitializedApp(
     }
     buyLoopTimer.clearInterval(buyLoopHandle);
     buyLoopHandle = null;
+    logger.info("buy_loop_stopped");
   };
 
   const startSellLoop = async (options: { immediate?: boolean } = {}) => {
@@ -688,6 +847,7 @@ export async function createInitializedApp(
       return;
     }
 
+    logger.info("sell_loop_starting", { intervalMs: config.intervals.sellMs, immediate: options.immediate !== false });
     if (options.immediate !== false) {
       await runSellCycle({ source: "scheduled" }).catch(() => {});
     }
@@ -695,6 +855,7 @@ export async function createInitializedApp(
     sellLoopHandle = sellLoopTimer.setInterval(() => {
       void runSellCycle({ source: "scheduled" }).catch(() => {});
     }, config.intervals.sellMs);
+    logger.info("sell_loop_started", { intervalMs: config.intervals.sellMs });
   };
 
   const stopSellLoop = () => {
@@ -703,6 +864,7 @@ export async function createInitializedApp(
     }
     sellLoopTimer.clearInterval(sellLoopHandle);
     sellLoopHandle = null;
+    logger.info("sell_loop_stopped");
   };
 
   const startFundingLoop = async (options: { immediate?: boolean } = {}) => {
@@ -710,6 +872,7 @@ export async function createInitializedApp(
       return;
     }
 
+    logger.info("funding_loop_starting", { intervalMs: config.intervals.fundingMs, immediate: options.immediate === true });
     if (options.immediate === true) {
       await runPrefundCycle("scheduled").catch(() => {});
     }
@@ -717,6 +880,7 @@ export async function createInitializedApp(
     fundingLoopHandle = fundingLoopTimer.setInterval(() => {
       void runPrefundCycle("scheduled").catch(() => {});
     }, config.intervals.fundingMs);
+    logger.info("funding_loop_started", { intervalMs: config.intervals.fundingMs });
   };
 
   const stopFundingLoop = () => {
@@ -725,9 +889,11 @@ export async function createInitializedApp(
     }
     fundingLoopTimer.clearInterval(fundingLoopHandle);
     fundingLoopHandle = null;
+    logger.info("funding_loop_stopped");
   };
 
   const addBotsWithReadiness = async (count: number) => {
+    logger.info("add_bots_start", { count });
     runtimeMonitor.recordJobStart("add_bots");
 
     try {
@@ -761,6 +927,12 @@ export async function createInitializedApp(
       }
 
       runtimeMonitor.recordJobSuccess("add_bots");
+      logger.info("add_bots_complete", {
+        addedCount: result.addedBots.length,
+        totalBotCount: result.updatedState.bots.length,
+        addedBotIds: result.addedBots.map((b) => b.id),
+        fundingError: fundingError ?? undefined
+      });
       return {
         addedBots: result.addedBots,
         totalBotCount: result.updatedState.bots.length,
@@ -963,15 +1135,92 @@ export async function createInitializedApp(
 }
 
 async function start(): Promise<void> {
-  const appCtx = await createInitializedApp(process.env);
+  const logger = createLogger();
+
+  logger.info("server_starting", { nodeEnv: process.env.NODE_ENV ?? "development" });
+
+  const envConfig = loadEnvConfig(process.env);
+
+  const dekantClient = new HttpDekantClient({
+    baseUrl: envConfig.integration.dekantBackendUrl,
+    timeoutMs: envConfig.clientDefaults.dekant.requestTimeoutMs,
+    retryCount: envConfig.clientDefaults.dekant.retryCount,
+    retryBackoffMs: envConfig.clientDefaults.dekant.retryBackoffMs
+  });
+
+  const priceClient = new PriceClient({
+    baseUrl: envConfig.integration.priceServiceUrl,
+    timeoutMs: envConfig.clientDefaults.price.requestTimeoutMs,
+    retryCount: envConfig.clientDefaults.price.retryCount,
+    retryBackoffMs: envConfig.clientDefaults.price.retryBackoffMs,
+    stalePolicy: envConfig.runtimeDefaults.stalePricePolicy
+  });
+
+  const faucetClient = new HttpFaucetClient({
+    baseUrl: envConfig.integration.dekantBackendUrl,
+    timeoutMs: envConfig.clientDefaults.faucet.requestTimeoutMs,
+    retryCount: envConfig.clientDefaults.faucet.retryCount,
+    retryBackoffMs: envConfig.clientDefaults.faucet.retryBackoffMs
+  });
+
+  const vaultClient = new HttpVaultClient({
+    baseUrl: envConfig.integration.dekantBackendUrl,
+    secretKey: envConfig.vault.secretKey,
+    timeoutMs: envConfig.clientDefaults.dekant.requestTimeoutMs,
+    retryCount: envConfig.clientDefaults.dekant.retryCount,
+    retryBackoffMs: envConfig.clientDefaults.dekant.retryBackoffMs
+  });
+
+  const balanceClient = new HttpBalanceClient({
+    baseUrl: envConfig.integration.dekantBackendUrl,
+    timeoutMs: envConfig.clientDefaults.dekant.requestTimeoutMs,
+    retryCount: envConfig.clientDefaults.dekant.retryCount,
+    retryBackoffMs: envConfig.clientDefaults.dekant.retryBackoffMs
+  });
+
+  logger.info("clients_initialized", {
+    dekantBackendUrl: envConfig.integration.dekantBackendUrl,
+    priceServiceUrl: envConfig.integration.priceServiceUrl,
+    botCount: envConfig.botFleet.initialBotCount,
+    intervals: envConfig.intervals
+  });
+
+  const appCtx = await createInitializedApp(process.env, {
+    observability: { logger },
+    marketCache: {
+      client: dekantClient
+    },
+    buy: {
+      dekant: dekantClient,
+      price: priceClient
+    },
+    sell: {
+      dekant: dekantClient,
+      price: priceClient
+    },
+    funding: {
+      vault: vaultClient,
+      balances: balanceClient,
+      faucet: faucetClient
+    }
+  });
+
   const { app, config } = appCtx;
 
   await app.listen({ host: config.host, port: config.port });
+  logger.info("server_listening", { host: config.host, port: config.port });
 
   await appCtx.markets?.start({ immediate: true });
   await appCtx.buy?.start({ immediate: true });
   await appCtx.sell?.start({ immediate: true });
   await appCtx.funding?.start({ immediate: false });
+
+  logger.info("all_loops_started", {
+    markets: appCtx.markets !== null,
+    buy: appCtx.buy !== null,
+    sell: appCtx.sell !== null,
+    funding: appCtx.funding !== null
+  });
 }
 
 function isMainModule(): boolean {
