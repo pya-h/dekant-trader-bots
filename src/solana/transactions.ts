@@ -5,6 +5,7 @@ import {
   Transaction
 } from "@solana/web3.js";
 import anchorPkg, { Program } from "@coral-xyz/anchor";
+import { createAssociatedTokenAccountIdempotentInstruction } from "@solana/spl-token";
 const { BN } = anchorPkg;
 type BN = InstanceType<typeof anchorPkg.BN>;
 import type { DekantPm } from "./program/dekant_pm.js";
@@ -142,10 +143,23 @@ async function resolveAccounts(
       traderAta,
       tokenProgram: TOKEN_PROGRAM_ID
     },
+    collateralMint,
+    traderAta,
     decimals,
     rangeMin: marketAccount.rangeMin as BN,
     rangeMax: marketAccount.rangeMax as BN
   };
+}
+
+function ensureTraderAtaIx(trader: PublicKey, traderAta: PublicKey, mint: PublicKey) {
+  return createAssociatedTokenAccountIdempotentInstruction(
+    trader,
+    traderAta,
+    trader,
+    mint,
+    TOKEN_PROGRAM_ID,
+    ASSOCIATED_TOKEN_PROGRAM_ID
+  );
 }
 
 async function simulateOrThrow(
@@ -190,13 +204,8 @@ export async function executeBuyDistribution(
   amount: string,
   resolveDecimals: DecimalsResolver
 ): Promise<string> {
-  const { accounts, decimals, rangeMin, rangeMax } = await resolveAccounts(
-    program,
-    programId,
-    marketPubkey,
-    trader,
-    resolveDecimals
-  );
+  const { accounts, collateralMint, traderAta, decimals, rangeMin, rangeMax } =
+    await resolveAccounts(program, programId, marketPubkey, trader, resolveDecimals);
   const builder = program.methods
     .buyDistribution({
       mu: scaleMu(mu, rangeMin, rangeMax),
@@ -206,7 +215,8 @@ export async function executeBuyDistribution(
     .accountsPartial({ ...accounts, systemProgram: SystemProgram.programId })
     .preInstructions([
       ComputeBudgetProgram.setComputeUnitLimit({ units: 1_400_000 }),
-      ComputeBudgetProgram.setComputeUnitPrice({ microLamports: priorityFeeMicroLamports() })
+      ComputeBudgetProgram.setComputeUnitPrice({ microLamports: priorityFeeMicroLamports() }),
+      ensureTraderAtaIx(trader, traderAta, collateralMint)
     ]);
 
   await simulateOrThrow(program, builder);
@@ -224,13 +234,8 @@ export async function executeSellDistribution(
   tokenAmount: string,
   resolveDecimals: DecimalsResolver
 ): Promise<string> {
-  const { accounts, decimals, rangeMin, rangeMax } = await resolveAccounts(
-    program,
-    programId,
-    marketPubkey,
-    trader,
-    resolveDecimals
-  );
+  const { accounts, collateralMint, traderAta, decimals, rangeMin, rangeMax } =
+    await resolveAccounts(program, programId, marketPubkey, trader, resolveDecimals);
   const builder = program.methods
     .sellDistribution({
       mu: scaleMu(mu, rangeMin, rangeMax),
@@ -240,7 +245,8 @@ export async function executeSellDistribution(
     .accountsPartial(accounts)
     .preInstructions([
       ComputeBudgetProgram.setComputeUnitLimit({ units: 1_400_000 }),
-      ComputeBudgetProgram.setComputeUnitPrice({ microLamports: priorityFeeMicroLamports() })
+      ComputeBudgetProgram.setComputeUnitPrice({ microLamports: priorityFeeMicroLamports() }),
+      ensureTraderAtaIx(trader, traderAta, collateralMint)
     ]);
 
   await simulateOrThrow(program, builder);
