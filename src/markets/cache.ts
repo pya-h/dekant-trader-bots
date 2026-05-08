@@ -156,11 +156,21 @@ export class MarketCache {
         if (market.liquidity !== undefined || market.lpSharesTotal === undefined) {
           return market;
         }
-        const raw = Number(market.lpSharesTotal);
-        if (!Number.isFinite(raw) || raw < 0) return market;
+        let raw: bigint;
+        try {
+          raw = BigInt(market.lpSharesTotal);
+        } catch {
+          return market;
+        }
+        if (raw < 0n) return market;
         try {
           const decimals = await this.mintRegistry!.getDecimals(market.collateralMint);
-          return { ...market, liquidity: raw / Math.pow(10, decimals) };
+          const scale = 10n ** BigInt(decimals);
+          // Final number is lossy by design — liquidity is used for sizing
+          // heuristics, never as authoritative collateral accounting.
+          const whole = Number(raw / scale);
+          const frac = Number(raw % scale) / Number(scale);
+          return { ...market, liquidity: whole + frac };
         } catch {
           return market;
         }

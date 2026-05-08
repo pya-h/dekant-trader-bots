@@ -1,21 +1,33 @@
+import { PublicKey } from "@solana/web3.js";
 import { z } from "zod";
 import { requestJsonWithRetry } from "./http-client.js";
 
-const marketSchema = z.object({
-  id: z.string(),
-  subject: z.string(),
-  collateralMint: z.string().min(1),
-  category: z.string().optional(),
-  state: z.number().int().optional(),
-  // Stringified u64 from the backend (collateral mint base units).
-  lpSharesTotal: z.string().optional(),
-  liquidity: z.number().optional(),
-  deadline: z.string().optional()
-});
+const marketSchema = z
+  .object({
+    id: z.string().regex(/^\d+$/, "id_must_be_numeric_string"),
+    subject: z.string(),
+    collateralMint: z.string().min(1).refine((value) => {
+      try {
+        new PublicKey(value);
+        return true;
+      } catch {
+        return false;
+      }
+    }, "collateralMint_not_valid_pubkey"),
+    category: z.string().optional(),
+    state: z.number().int().optional(),
+    // Stringified u64 from the backend (collateral mint base units).
+    lpSharesTotal: z.string().optional(),
+    liquidity: z.number().optional(),
+    deadline: z.string().optional()
+  });
 
+// Loose response shape; invalid market entries are dropped (with a warn log)
+// instead of failing the entire response, since one bad row shouldn't kill
+// market discovery.
 const marketsResponseSchema = z.union([
-  z.array(marketSchema),
-  z.object({ data: z.array(marketSchema) }).passthrough()
+  z.array(z.unknown()),
+  z.object({ data: z.array(z.unknown()) }).passthrough()
 ]);
 
 const positionSchema = z.object({
@@ -50,6 +62,7 @@ export type DekantClientOptions = {
   retryCount: number;
   retryBackoffMs: number;
   fetchImpl?: typeof fetch;
+  onMarketDropped?: (input: { reason: string; raw: unknown }) => void;
 };
 
 export class HttpDekantClient implements Pick<DekantClient, "fetchMarkets"> {
@@ -58,6 +71,7 @@ export class HttpDekantClient implements Pick<DekantClient, "fetchMarkets"> {
   private readonly retryCount: number;
   private readonly retryBackoffMs: number;
   private readonly fetchImpl?: typeof fetch;
+  private readonly onMarketDropped?: (input: { reason: string; raw: unknown }) => void;
 
   constructor(options: DekantClientOptions) {
     this.baseUrl = options.baseUrl.replace(/\/$/, "");
@@ -65,6 +79,7 @@ export class HttpDekantClient implements Pick<DekantClient, "fetchMarkets"> {
     this.retryCount = options.retryCount;
     this.retryBackoffMs = options.retryBackoffMs;
     this.fetchImpl = options.fetchImpl;
+    this.onMarketDropped = options.onMarketDropped;
   }
 
   async fetchMarkets(): Promise<DekantMarket[]> {
@@ -77,6 +92,16 @@ export class HttpDekantClient implements Pick<DekantClient, "fetchMarkets"> {
     });
 
     const parsed = marketsResponseSchema.parse(payload);
-    return Array.isArray(parsed) ? parsed : parsed.data;
+    const raw = Array.isArray(parsed) ? parsed : parsed.data;
+    const valid: DekantMarket[] = [];
+    for (const entry of raw) {
+      const result = marketSchema.safeParse(entry);
+      if (result.success) {
+        valid.push(result.data);
+      } else {
+        this.onMarketDropped?.({ reason: result.error.message, raw: entry });
+      }
+    }
+    return valid;
   }
 }
