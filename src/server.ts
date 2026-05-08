@@ -17,6 +17,7 @@ import { BalanceClient, FundingEngine, ManualFundRequest, VaultClient } from "./
 import { MarketCache } from "./markets/cache.js";
 import { MintRegistry } from "./clients/mint-registry.js";
 import { runtimeConfigSchema } from "./state/types.js";
+import { BotPositionMemory } from "./state/position-memory.js";
 import type { StateStore } from "./storage/state-store.js";
 import { TradeStatsStore } from "./metrics/trade-stats.js";
 import { classifyError } from "./observability/errors.js";
@@ -208,6 +209,9 @@ export async function createInitializedApp(
   });
 
   const config = buildAppConfig(envConfig, state.runtimeConfig);
+
+  const positionMemory = new BotPositionMemory({ store: state.store, now });
+  await positionMemory.load();
   const marketCache = options.marketCache
     ? new MarketCache({
         client: options.marketCache.client,
@@ -284,7 +288,15 @@ export async function createInitializedApp(
           now: options.buy.now,
           random: options.buy.random,
           timer: options.buy.timer,
-          onCycleError: handleBuyEngineCycleError
+          onCycleError: handleBuyEngineCycleError,
+          onSubmitted: (event) => {
+            positionMemory.record({
+              botPubkey: event.bot.publicKey,
+              marketId: event.marketId,
+              center: event.center,
+              spread: event.spread
+            });
+          }
         })
       : null;
   const sellEngine =
@@ -989,6 +1001,7 @@ export async function createInitializedApp(
     app,
     config,
     state,
+    positionMemory,
     startup: {
       createdBots: reconciliation.createdBots,
       hadExistingBots: reconciliation.hadExistingBots,
@@ -1143,6 +1156,12 @@ async function start(): Promise<void> {
   const connection = new Connection(envConfig.integration.solanaRpcUrl, "confirmed");
   const mintRegistry = new MintRegistry({ connection });
 
+  // Late-bound lookup that the createInitializedApp call below installs once it
+  // has constructed the position memory.
+  const positionLookup: { fn: ((pubkey: string, marketId: string) => { center: number; spread: number } | null) | null } = {
+    fn: null
+  };
+
   const dekantClient: DekantClient = new SolanaDekantClient({
     connection,
     programId,
@@ -1152,6 +1171,14 @@ async function start(): Promise<void> {
       const bot = botRegistry.getBots().find((candidate) => candidate.id === botId);
       if (!bot) return null;
       return loadKeypairFromSecret(bot.secretKey);
+    },
+    lookupPositionMemory: (pubkey, marketId) =>
+      positionLookup.fn ? positionLookup.fn(pubkey, marketId) : null,
+    onMissingPositionCenter: (input) => {
+      startupLogger.warn?.("position_center_missing", {
+        botPubkey: input.botPubkey,
+        marketId: input.marketId
+      });
     }
   });
 
@@ -1162,10 +1189,14 @@ async function start(): Promise<void> {
     rpcUrl: envConfig.integration.solanaRpcUrl
   });
 
+  const priorityFee = process.env.PRIORITY_FEE_MICROLAMPORTS
+    ? Number(process.env.PRIORITY_FEE_MICROLAMPORTS)
+    : 1000;
   const vaultClient = new SolanaVaultClient({
     connection,
     vaultKeypair,
-    mintRegistry
+    mintRegistry,
+    priorityFeeMicroLamports: Number.isFinite(priorityFee) && priorityFee >= 0 ? priorityFee : 1000
   });
 
   const balanceClient = new SolanaBalanceClient({
@@ -1186,9 +1217,36 @@ async function start(): Promise<void> {
   const { app, config } = appCtx;
 
   botRegistry.getBots = () => appCtx.state.botsState.bots;
+  positionLookup.fn = (pubkey, marketId) => {
+    const entry = appCtx.positionMemory.lookup(pubkey, marketId);
+    if (!entry) return null;
+    return { center: entry.center, spread: entry.spread };
+  };
 
   await app.listen({ host: config.host, port: config.port });
   startupLogger.info?.("server_listening", { host: config.host, port: config.port });
+
+  let shuttingDown = false;
+  const shutdown = async (signal: string) => {
+    if (shuttingDown) return;
+    shuttingDown = true;
+    startupLogger.info?.("shutdown_initiated", { signal });
+    try {
+      appCtx.buy?.stop();
+      appCtx.sell?.stop();
+      appCtx.markets?.stop();
+      appCtx.funding?.stop();
+      await app.close();
+    } catch (error) {
+      startupLogger.error?.("shutdown_error", {
+        message: error instanceof Error ? error.message : String(error)
+      });
+    } finally {
+      process.exit(0);
+    }
+  };
+  process.on("SIGTERM", () => void shutdown("SIGTERM"));
+  process.on("SIGINT", () => void shutdown("SIGINT"));
 
   await appCtx.markets?.start({ immediate: true });
   await appCtx.funding?.start({ immediate: false });

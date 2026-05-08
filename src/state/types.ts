@@ -48,3 +48,19 @@ export const botsStateFileSchema = z.object({
 });
 
 export type BotsStateFile = z.infer<typeof botsStateFileSchema>;
+
+export const botPositionMemoryEntrySchema = z.object({
+  botPubkey: z.string().min(1),
+  marketId: z.string().min(1),
+  center: z.number(),
+  spread: z.number(),
+  ts: z.string().datetime()
+});
+export type BotPositionMemoryEntry = z.infer<typeof botPositionMemoryEntrySchema>;
+
+export const botPositionMemoryFileSchema = z.object({
+  version: z.literal(1),
+  updatedAt: z.string().datetime(),
+  entries: z.array(botPositionMemoryEntrySchema)
+});
+export type BotPositionMemoryFile = z.infer<typeof botPositionMemoryFileSchema>;
