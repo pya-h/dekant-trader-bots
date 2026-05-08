@@ -4,7 +4,19 @@ import {
   SystemProgram,
   SYSVAR_RENT_PUBKEY
 } from "@solana/web3.js";
-import { TOKEN_PROGRAM_ID, getAssociatedTokenAddressSync, ASSOCIATED_TOKEN_PROGRAM_ID } from "@solana/spl-token";
+import { TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID } from "@solana/spl-token";
+
+function getAssociatedTokenAddressSync(
+  mint: PublicKey,
+  owner: PublicKey,
+  allowOwnerOffCurve: boolean = false
+): PublicKey {
+  const [address] = PublicKey.findProgramAddressSync(
+    [owner.toBuffer(), TOKEN_PROGRAM_ID.toBuffer(), mint.toBuffer()],
+    ASSOCIATED_TOKEN_PROGRAM_ID
+  );
+  return address;
+}
 
 const INSTRUCTION_BUY = 0;
 const INSTRUCTION_SELL = 1;
