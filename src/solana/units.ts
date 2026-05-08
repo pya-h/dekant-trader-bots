@@ -1,4 +1,6 @@
-import { BN } from "@coral-xyz/anchor";
+import pkg from "@coral-xyz/anchor";
+const { BN } = pkg;
+type BN = InstanceType<typeof pkg.BN>;
 
 function splitAmount(amount: string, decimals: number): string {
   const trimmed = amount.trim();
