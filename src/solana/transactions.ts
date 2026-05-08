@@ -205,11 +205,82 @@ async function resolveAccounts(
       traderAta,
       tokenProgram: TOKEN_PROGRAM_ID
     },
+    marketAccount,
     collateralMint,
     traderAta,
     decimals,
     rangeMin: marketAccount.rangeMin as BN,
     rangeMax: marketAccount.rangeMax as BN
+  };
+}
+
+export type TradeImpact = {
+  decimals: number;
+  rangeMin: string;
+  rangeMax: string;
+  collateralBaseUnits: string;
+  before: { totalMinted: string; kSquared: string; lpSharesTotal: string };
+  after: { totalMinted: string; kSquared: string; lpSharesTotal: string };
+  delta: { totalMinted: string; kSquared: string; lpSharesTotal: string };
+  /** Tokens transacted (delta of total_minted) in human units. */
+  tokensTransacted: number;
+  /** Effective per-token price = collateral / tokensTransacted, in collateral human units. */
+  effectivePrice: number | null;
+  /** k_squared post / pre — scalar curvature change. */
+  kSquaredRatio: number | null;
+};
+
+function snapshot(account: { totalMinted: BN; kSquared: BN; lpSharesTotal: BN }) {
+  return {
+    totalMinted: (account.totalMinted as BN).toString(),
+    kSquared: (account.kSquared as BN).toString(),
+    lpSharesTotal: (account.lpSharesTotal as BN).toString()
+  };
+}
+
+function computeImpact(args: {
+  before: ReturnType<typeof snapshot>;
+  after: ReturnType<typeof snapshot>;
+  decimals: number;
+  rangeMin: BN;
+  rangeMax: BN;
+  /** Collateral paid (buy) — omit for sells where collateral received isn't known here. */
+  collateralBaseUnits?: string;
+}): TradeImpact {
+  const beforeMinted = BigInt(args.before.totalMinted);
+  const afterMinted = BigInt(args.after.totalMinted);
+  const mintedDelta = afterMinted - beforeMinted;
+  const absMintedDelta = mintedDelta < 0n ? -mintedDelta : mintedDelta;
+  const scale = 10 ** args.decimals;
+  const tokensTransacted = Number(absMintedDelta) / scale;
+  let effectivePrice: number | null = null;
+  if (args.collateralBaseUnits !== undefined && tokensTransacted > 0) {
+    const collateralHuman = Number(BigInt(args.collateralBaseUnits)) / scale;
+    effectivePrice = collateralHuman / tokensTransacted;
+  }
+
+  const beforeK = BigInt(args.before.kSquared);
+  const afterK = BigInt(args.after.kSquared);
+  const kSquaredRatio = beforeK > 0n ? Number(afterK) / Number(beforeK) : null;
+
+  const beforeLp = BigInt(args.before.lpSharesTotal);
+  const afterLp = BigInt(args.after.lpSharesTotal);
+
+  return {
+    decimals: args.decimals,
+    rangeMin: args.rangeMin.toString(),
+    rangeMax: args.rangeMax.toString(),
+    collateralBaseUnits: args.collateralBaseUnits ?? "",
+    before: args.before,
+    after: args.after,
+    delta: {
+      totalMinted: (afterMinted - beforeMinted).toString(),
+      kSquared: (afterK - beforeK).toString(),
+      lpSharesTotal: (afterLp - beforeLp).toString()
+    },
+    tokensTransacted,
+    effectivePrice,
+    kSquaredRatio
   };
 }
 
@@ -263,6 +334,20 @@ async function simulateOrThrow(
   }
 }
 
+export type TradeResult = { txId: string; impact?: TradeImpact };
+
+async function fetchSnapshotSafe(
+  program: Program<DekantPm>,
+  marketPubkey: PublicKey
+): Promise<ReturnType<typeof snapshot> | null> {
+  try {
+    const account = await program.account.market.fetch(marketPubkey);
+    return snapshot(account as unknown as { totalMinted: BN; kSquared: BN; lpSharesTotal: BN });
+  } catch {
+    return null;
+  }
+}
+
 export async function executeBuyDistribution(
   program: Program<DekantPm>,
   programId: PublicKey,
@@ -272,14 +357,15 @@ export async function executeBuyDistribution(
   sigma: number,
   amount: string,
   resolveDecimals: DecimalsResolver
-): Promise<string> {
-  const { accounts, collateralMint, traderAta, decimals, rangeMin, rangeMax } =
+): Promise<TradeResult> {
+  const { accounts, marketAccount, collateralMint, traderAta, decimals, rangeMin, rangeMax } =
     await resolveAccounts(program, programId, marketPubkey, trader, resolveDecimals);
+  const collateralBaseUnits = toBaseUnitsBN(amount, decimals);
   const builder = program.methods
     .buyDistribution({
       mu: scaleMu(mu, rangeMin, rangeMax),
       sigma: scaleSigma(sigma),
-      collateralAmount: toBaseUnitsBN(amount, decimals)
+      collateralAmount: collateralBaseUnits
     })
     .accountsPartial({ ...accounts, systemProgram: SystemProgram.programId })
     .preInstructions([
@@ -290,7 +376,22 @@ export async function executeBuyDistribution(
 
   await simulateOrThrow(program, builder);
 
-  return builder.rpc({ skipPreflight: false, maxRetries: 3, commitment: "confirmed" });
+  const before = snapshot(
+    marketAccount as unknown as { totalMinted: BN; kSquared: BN; lpSharesTotal: BN }
+  );
+  const txId = await builder.rpc({ skipPreflight: false, maxRetries: 3, commitment: "confirmed" });
+  const after = await fetchSnapshotSafe(program, marketPubkey);
+  const impact = after
+    ? computeImpact({
+        before,
+        after,
+        decimals,
+        rangeMin,
+        rangeMax,
+        collateralBaseUnits: collateralBaseUnits.toString()
+      })
+    : undefined;
+  return { txId, impact };
 }
 
 export async function executeSellDistribution(
@@ -302,14 +403,15 @@ export async function executeSellDistribution(
   sigma: number,
   tokenAmount: string,
   resolveDecimals: DecimalsResolver
-): Promise<string> {
-  const { accounts, collateralMint, traderAta, decimals, rangeMin, rangeMax } =
+): Promise<TradeResult> {
+  const { accounts, marketAccount, collateralMint, traderAta, decimals, rangeMin, rangeMax } =
     await resolveAccounts(program, programId, marketPubkey, trader, resolveDecimals);
+  const tokenAmountBaseUnits = toBaseUnitsBN(tokenAmount, decimals);
   const builder = program.methods
     .sellDistribution({
       mu: scaleMu(mu, rangeMin, rangeMax),
       sigma: scaleSigma(sigma),
-      tokenAmount: toBaseUnitsBN(tokenAmount, decimals)
+      tokenAmount: tokenAmountBaseUnits
     })
     .accountsPartial(accounts)
     .preInstructions([
@@ -320,5 +422,13 @@ export async function executeSellDistribution(
 
   await simulateOrThrow(program, builder);
 
-  return builder.rpc({ skipPreflight: false, maxRetries: 3, commitment: "confirmed" });
+  const before = snapshot(
+    marketAccount as unknown as { totalMinted: BN; kSquared: BN; lpSharesTotal: BN }
+  );
+  const txId = await builder.rpc({ skipPreflight: false, maxRetries: 3, commitment: "confirmed" });
+  const after = await fetchSnapshotSafe(program, marketPubkey);
+  const impact = after
+    ? computeImpact({ before, after, decimals, rangeMin, rangeMax })
+    : undefined;
+  return { txId, impact };
 }

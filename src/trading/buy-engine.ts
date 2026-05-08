@@ -158,6 +158,7 @@ export type BuyCycleAction = {
   txId?: string;
   error?: string;
   errorLogs?: string[];
+  impact?: import("../clients/dekant-client.js").TradeImpactSummary;
 };
 
 export type BuyCycleResult = {
@@ -543,7 +544,8 @@ export class BuyEngine {
               collateralAmount,
               center: prediction.center,
               spread: prediction.spread,
-              txId: tx.txId
+              txId: tx.txId,
+              impact: tx.impact
             });
           } catch (error) {
             outcome.failedSubmit += 1;

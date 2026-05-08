@@ -50,11 +50,25 @@ export type SubmitTradeRequest = {
   spread: number;
 };
 
+export type TradeImpactSummary = {
+  tokensTransacted: number;
+  effectivePrice: number | null;
+  kSquaredRatio: number | null;
+  delta: { totalMinted: string; kSquared: string; lpSharesTotal: string };
+  before: { totalMinted: string; kSquared: string; lpSharesTotal: string };
+  after: { totalMinted: string; kSquared: string; lpSharesTotal: string };
+};
+
+export type SubmitTradeResult = {
+  txId: string;
+  impact?: TradeImpactSummary;
+};
+
 export interface DekantClient {
   fetchMarkets(): Promise<DekantMarket[]>;
   fetchPositions(botId: string): Promise<DekantPosition[]>;
-  submitBuyOrder(input: SubmitTradeRequest): Promise<{ txId: string }>;
-  submitSellOrder(input: SubmitTradeRequest): Promise<{ txId: string }>;
+  submitBuyOrder(input: SubmitTradeRequest): Promise<SubmitTradeResult>;
+  submitSellOrder(input: SubmitTradeRequest): Promise<SubmitTradeResult>;
 }
 
 export type DekantClientOptions = {

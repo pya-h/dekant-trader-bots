@@ -456,11 +456,45 @@ export async function createInitializedApp(
         marketIds: input.marketIds
       });
       statsStore.ingestBuyCycle(cycle);
+      const buyStatusCounts = cycle.actions.reduce<Record<string, number>>((acc, a) => {
+        acc[a.status] = (acc[a.status] ?? 0) + 1;
+        return acc;
+      }, {});
+      const buyByMarket: Record<string, { submitted: number; collateral: number }> = {};
+      let totalBuyCollateral = 0;
+      for (const action of cycle.actions) {
+        if (action.status !== "submitted") continue;
+        const collateral = action.collateralAmount ?? 0;
+        totalBuyCollateral += collateral;
+        const m = (buyByMarket[action.marketId] ??= { submitted: 0, collateral: 0 });
+        m.submitted += 1;
+        m.collateral += collateral;
+        safeInfo(logger, "buy_executed", {
+          source: cycle.source,
+          botId: action.botId,
+          marketId: action.marketId,
+          token: action.token,
+          collateralAmount: collateral,
+          center: action.center,
+          spread: action.spread,
+          txId: action.txId,
+          tokensReceived: action.impact?.tokensTransacted,
+          effectivePrice: action.impact?.effectivePrice,
+          kSquaredRatio: action.impact?.kSquaredRatio,
+          curveDelta: action.impact?.delta
+        });
+      }
+      for (const market of Object.values(buyByMarket)) {
+        market.collateral = Number(market.collateral.toFixed(6));
+      }
       safeInfo(logger, "buy_cycle_completed", {
         source: cycle.source,
         actions: cycle.actions.length,
         succeeded: cycle.actions.filter((a) => a.status === "submitted").length,
-        failed: cycle.actions.filter((a) => a.status === "failed_submit").length
+        failed: cycle.actions.filter((a) => a.status === "failed_submit").length,
+        statusCounts: buyStatusCounts,
+        totalCollateral: Number(totalBuyCollateral.toFixed(6)),
+        byMarket: buyByMarket
       });
 
       for (const action of cycle.actions) {
@@ -520,11 +554,43 @@ export async function createInitializedApp(
         marketIds: input.marketIds
       });
       statsStore.ingestSellCycle(cycle);
+      const sellStatusCounts = cycle.actions.reduce<Record<string, number>>((acc, a) => {
+        acc[a.status] = (acc[a.status] ?? 0) + 1;
+        return acc;
+      }, {});
+      const sellByMarket: Record<string, { sold: number; tokens: number }> = {};
+      let totalSoldTokens = 0;
+      for (const action of cycle.actions) {
+        if (action.status !== "sold_full") continue;
+        const amount = action.requestedSellAmount ?? 0;
+        totalSoldTokens += amount;
+        const m = (sellByMarket[action.marketId] ??= { sold: 0, tokens: 0 });
+        m.sold += 1;
+        m.tokens += amount;
+        safeInfo(logger, "sell_executed", {
+          source: cycle.source,
+          botId: action.botId,
+          marketId: action.marketId,
+          token: action.token,
+          positionId: action.positionId,
+          tokenAmount: amount,
+          txId: action.txId,
+          tokensBurned: action.impact?.tokensTransacted,
+          kSquaredRatio: action.impact?.kSquaredRatio,
+          curveDelta: action.impact?.delta
+        });
+      }
+      for (const market of Object.values(sellByMarket)) {
+        market.tokens = Number(market.tokens.toFixed(6));
+      }
       safeInfo(logger, "sell_cycle_completed", {
         source: cycle.source,
         actions: cycle.actions.length,
         succeeded: cycle.actions.filter((a) => a.status === "sold_full").length,
-        failed: cycle.actions.filter((a) => a.status === "failed_submit").length
+        failed: cycle.actions.filter((a) => a.status === "failed_submit").length,
+        statusCounts: sellStatusCounts,
+        totalTokensSold: Number(totalSoldTokens.toFixed(6)),
+        byMarket: sellByMarket
       });
 
       for (const action of cycle.actions) {
