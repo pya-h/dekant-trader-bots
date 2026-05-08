@@ -98,16 +98,41 @@ const SPL_TOKEN_ERRORS: Record<number, string> = {
   0x13: "NonNativeNotSupported"
 };
 
-function parseSplTokenError(logs: string[] | null | undefined): { code?: string; line?: string } {
+const TOKEN_PROGRAM_ID_STR = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA";
+const SYSTEM_PROGRAM_ID_STR = "11111111111111111111111111111111";
+
+function parseProgramError(
+  logs: string[] | null | undefined
+): { program?: "spl_token" | "system" | "other"; code?: string; detail?: string } {
   if (!logs) return {};
+  let lamportDetail: string | undefined;
+  let directError: string | undefined;
   for (const line of logs) {
-    const m = line.match(/Token[^\s]*\s+failed:\s+custom program error:\s+0x([0-9a-fA-F]+)/);
-    if (m) {
-      const num = Number.parseInt(m[1], 16);
-      return { code: SPL_TOKEN_ERRORS[num] ?? `0x${m[1]}`, line };
-    }
+    const t = line.match(/Transfer:\s+(insufficient lamports[^,]*,\s*need\s*\d+)/i);
+    if (t) lamportDetail = t[1];
     const direct = line.match(/Program log: Error:\s+(.+?)\.?$/);
-    if (direct) return { code: direct[1].replace(/\s+/g, ""), line };
+    if (direct && !directError) directError = direct[1];
+  }
+  for (const line of logs) {
+    const m = line.match(/Program\s+(\S+)\s+failed:\s+custom program error:\s+0x([0-9a-fA-F]+)/);
+    if (!m) continue;
+    const programId = m[1];
+    const num = Number.parseInt(m[2], 16);
+    if (programId === TOKEN_PROGRAM_ID_STR) {
+      return {
+        program: "spl_token",
+        code: SPL_TOKEN_ERRORS[num] ?? `0x${m[2]}`,
+        detail: directError
+      };
+    }
+    if (programId === SYSTEM_PROGRAM_ID_STR) {
+      return {
+        program: "system",
+        code: lamportDetail ? "InsufficientLamports" : `0x${m[2]}`,
+        detail: lamportDetail ?? directError
+      };
+    }
+    return { program: "other", code: `${programId}:0x${m[2]}`, detail: directError };
   }
   return {};
 }
@@ -222,8 +247,11 @@ async function simulateOrThrow(
       if (anchor.account) parts.push(`account=${anchor.account}`);
       if (anchor.message) parts.push(`reason="${anchor.message}"`);
       if (!anchor.code) {
-        const spl = parseSplTokenError(logs);
-        if (spl.code) parts.push(`spl_token=${spl.code}`);
+        const prog = parseProgramError(logs);
+        if (prog.program && prog.code) {
+          parts.push(`${prog.program}=${prog.code}`);
+          if (prog.detail) parts.push(`detail="${prog.detail}"`);
+        }
       }
       throw new SimulationError(parts.join(" "), logs, anchor);
     }
