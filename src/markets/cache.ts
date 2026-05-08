@@ -96,7 +96,7 @@ export class MarketCache {
     };
   }
 
-  async refresh(): Promise<{ updated: boolean; count: number; error?: string }> {
+  async refresh(): Promise<{ updated: boolean; count: number; error?: string; rawError?: unknown }> {
     try {
       const markets = await this.client.fetchMarkets();
       const filtered = filterEligibleMarkets({
@@ -119,7 +119,8 @@ export class MarketCache {
       return {
         updated: false,
         count: this.activeMarkets.length,
-        error: this.lastError
+        error: this.lastError,
+        rawError: error
       };
     }
   }
