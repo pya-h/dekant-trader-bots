@@ -1196,8 +1196,7 @@ async function start(): Promise<void> {
   const vaultKeypair = loadKeypairFromSecret(envConfig.vault.secretKey);
   const vaultAddress = vaultKeypair.publicKey.toBase58();
   startupLogger.info?.("vault_loaded", {
-    publicKey: vaultAddress,
-    rpcUrl: envConfig.integration.solanaRpcUrl
+    publicKey: vaultAddress
   });
 
   const priorityFee = process.env.PRIORITY_FEE_MICROLAMPORTS
