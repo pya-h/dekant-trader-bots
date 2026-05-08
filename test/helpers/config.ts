@@ -86,7 +86,7 @@ export function createBaseEnv(overrides: NodeJS.ProcessEnv = {}): NodeJS.Process
     PREFUND_MULTIPLIER: "10",
     EMERGENCY_TOPUP_COOLDOWN_MS: "300000",
     MIN_BOT_SOL: "0.01",
-    VAULT_SUPPORTED_MINTS: "USDT,USDC",
+    VAULT_MINT_ALLOWLIST: "",
     STALE_PRICE_POLICY: "skip",
     PRICE_REQUEST_TIMEOUT_MS: "5000",
     PRICE_RETRY_COUNT: "2",

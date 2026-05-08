@@ -32,7 +32,7 @@ const envSchema = z.object({
   PREFUND_MULTIPLIER: z.coerce.number().positive().default(10),
   EMERGENCY_TOPUP_COOLDOWN_MS: z.coerce.number().int().positive().default(300_000),
   MIN_BOT_SOL: z.coerce.number().positive().default(0.01),
-  VAULT_SUPPORTED_MINTS: z.string().default(""),
+  VAULT_MINT_ALLOWLIST: z.string().default(""),
   STALE_PRICE_POLICY: z.enum(["skip", "allow"]).default("skip"),
   PRICE_REQUEST_TIMEOUT_MS: z.coerce.number().int().positive().default(5_000),
   PRICE_RETRY_COUNT: z.coerce.number().int().nonnegative().default(2),
@@ -78,7 +78,7 @@ export type EnvConfig = {
     prefundMultiplier: number;
     emergencyTopupCooldownMs: number;
     minBotSol: number;
-    vaultSupportedMints: string[];
+    vaultMintAllowlist: string[];
     stalePricePolicy: "skip" | "allow";
   };
   clientDefaults: {
@@ -172,7 +172,7 @@ export function loadEnvConfig(env: NodeJS.ProcessEnv = process.env): EnvConfig {
       prefundMultiplier: parsed.PREFUND_MULTIPLIER,
       emergencyTopupCooldownMs: parsed.EMERGENCY_TOPUP_COOLDOWN_MS,
       minBotSol: parsed.MIN_BOT_SOL,
-      vaultSupportedMints: parseMintList(parsed.VAULT_SUPPORTED_MINTS),
+      vaultMintAllowlist: parseMintList(parsed.VAULT_MINT_ALLOWLIST),
       stalePricePolicy: parsed.STALE_PRICE_POLICY
     },
     clientDefaults: {

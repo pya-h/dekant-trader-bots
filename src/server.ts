@@ -553,22 +553,29 @@ export async function createInitializedApp(
     const discovered = unique(
       markets.map((market) => market.collateralMint).filter((mint): mint is string => Boolean(mint))
     );
+    // VAULT_MINT_ALLOWLIST is an optional gate: when set, the synced set is
+    // discovered ∩ allowlist. Empty allowlist = no gate.
+    const allowlist = envConfig.runtimeDefaults.vaultMintAllowlist;
+    const next = allowlist.length === 0
+      ? discovered
+      : discovered.filter((mint) => allowlist.includes(mint));
     const current = state.runtimeConfig.config.funding.vaultSupportedMints;
-    if (discovered.length === current.length && discovered.every((mint) => current.includes(mint))) {
+    if (next.length === current.length && next.every((mint) => current.includes(mint))) {
       return;
     }
     const nextConfig = {
       ...state.runtimeConfig.config,
       funding: {
         ...state.runtimeConfig.config.funding,
-        vaultSupportedMints: discovered
+        vaultSupportedMints: next
       }
     };
     await persistRuntimeConfig(nextConfig);
-    fundingEngine?.updateRuntime({ vaultSupportedMints: discovered });
+    fundingEngine?.updateRuntime({ vaultSupportedMints: next });
     safeInfo(logger, "vault_supported_mints_updated", {
-      mints: discovered,
-      count: discovered.length
+      mints: next,
+      count: next.length,
+      allowlistSize: allowlist.length
     });
   };
 
