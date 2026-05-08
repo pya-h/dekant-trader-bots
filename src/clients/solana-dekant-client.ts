@@ -113,9 +113,9 @@ export class SolanaDekantClient implements DekantClient {
     return positions;
   }
 
-  async submitBuyOrder(input: SubmitTradeRequest): Promise<{ txId: string }> {
+  async submitBuyOrder(input: SubmitTradeRequest) {
     const { keypair, program, marketPubkey } = await this.tradeContext(input);
-    const txId = await executeBuyDistribution(
+    const result = await executeBuyDistribution(
       program,
       this.programId,
       marketPubkey,
@@ -125,12 +125,12 @@ export class SolanaDekantClient implements DekantClient {
       input.collateralAmount.toString(),
       (mint) => this.mintRegistry.getDecimals(mint)
     );
-    return { txId };
+    return result;
   }
 
-  async submitSellOrder(input: SubmitTradeRequest): Promise<{ txId: string }> {
+  async submitSellOrder(input: SubmitTradeRequest) {
     const { keypair, program, marketPubkey } = await this.tradeContext(input);
-    const txId = await executeSellDistribution(
+    const result = await executeSellDistribution(
       program,
       this.programId,
       marketPubkey,
@@ -140,7 +140,7 @@ export class SolanaDekantClient implements DekantClient {
       input.collateralAmount.toString(),
       (mint) => this.mintRegistry.getDecimals(mint)
     );
-    return { txId };
+    return result;
   }
 
   private async tradeContext(input: SubmitTradeRequest) {

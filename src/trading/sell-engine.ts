@@ -76,6 +76,7 @@ export type SellCycleAction = {
   txId?: string;
   error?: string;
   errorLogs?: string[];
+  impact?: import("../clients/dekant-client.js").TradeImpactSummary;
 };
 
 export type SellCycleResult = {
@@ -529,7 +530,8 @@ export class SellEngine {
               positionId: position.id,
               status: "sold_full",
               requestedSellAmount,
-              txId: tx.txId
+              txId: tx.txId,
+              impact: tx.impact
             });
           } catch (error) {
             outcome.failedSubmit += 1;
