@@ -1,4 +1,5 @@
 import Fastify, { FastifyInstance } from "fastify";
+import { timingSafeEqual } from "node:crypto";
 import { z } from "zod";
 import { parsePaginationQuery } from "./api/pagination.js";
 import { AppConfig } from "./config.js";
@@ -147,13 +148,26 @@ export function buildApp(
     });
 
     app.setErrorHandler((error, request, reply) => {
+      const requestId = request.id;
       logger.error("http_unhandled_error", {
+        requestId,
         method: request.method,
         url: request.url,
         message: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
         statusCode: reply.statusCode
       });
-      reply.send(error);
+      // ZodError → 400 with field paths only (no values).
+      if (error instanceof z.ZodError) {
+        const issues = error.issues.map((issue) => ({
+          path: issue.path.map((segment) => String(segment)).join("."),
+          code: issue.code,
+          message: issue.message
+        }));
+        return reply.code(400).send({ error: "invalid_request", issues, requestId });
+      }
+      // Otherwise opaque 500.
+      return reply.code(500).send({ error: "internal", requestId });
     });
   }
   const resolveRuntimeSnapshot = () => {
@@ -176,7 +190,14 @@ export function buildApp(
     async (adminScope) => {
       adminScope.addHook("onRequest", async (request, reply) => {
         const securityHeader = request.headers["x-security"];
-        if (securityHeader !== config.adminSecret) {
+        const expected = config.adminSecret;
+        if (typeof securityHeader !== "string") {
+          return reply.code(401).send({ error: "unauthorized" });
+        }
+        const provided = Buffer.from(securityHeader, "utf8");
+        const expectedBuf = Buffer.from(expected, "utf8");
+        // timingSafeEqual throws on length mismatch — fail closed without ever calling it.
+        if (provided.length !== expectedBuf.length || !timingSafeEqual(provided, expectedBuf)) {
           return reply.code(401).send({ error: "unauthorized" });
         }
       });

@@ -17,14 +17,22 @@ const DEFAULTS: PaginationDefaults = {
   maxPageSize: 200
 };
 
+const MAX_LIMIT = 1000;
+const MAX_OFFSET = 1_000_000;
+
 function parsePositiveInt(value: unknown): number | null {
-  if (typeof value === "number" && Number.isInteger(value) && value > 0) {
+  // Reject Infinity / scientific-notation / non-finite values by going through
+  // parseInt-on-string and Number.isSafeInteger.
+  if (typeof value === "number") {
+    if (!Number.isSafeInteger(value) || value <= 0) return null;
     return value;
   }
 
   if (typeof value === "string" && value.trim().length > 0) {
-    const parsed = Number(value);
-    if (Number.isInteger(parsed) && parsed > 0) {
+    const trimmed = value.trim();
+    if (!/^\d+$/.test(trimmed)) return null;
+    const parsed = parseInt(trimmed, 10);
+    if (Number.isSafeInteger(parsed) && parsed > 0) {
       return parsed;
     }
   }
@@ -46,12 +54,16 @@ export function parsePaginationQuery(
     throw new Error("invalid_page_size");
   }
 
-  const pageSize = Math.min(requestedPageSize, defaults.maxPageSize);
+  const pageSize = Math.min(requestedPageSize, defaults.maxPageSize, MAX_LIMIT);
+  const offset = (page - 1) * pageSize;
+  if (offset > MAX_OFFSET) {
+    throw new Error("invalid_page");
+  }
 
   return {
     page,
     pageSize,
-    offset: (page - 1) * pageSize,
+    offset,
     limit: pageSize
   };
 }
