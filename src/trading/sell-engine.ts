@@ -3,6 +3,16 @@ import { DekantClient, DekantMarket, DekantPosition } from "../clients/dekant-cl
 import { MarketPriceResolution } from "../clients/price-client.js";
 import { BotRecord } from "../state/types.js";
 import { buildPredictionRange, rollChance } from "./buy-engine.js";
+import { SimulationError } from "../solana/transactions.js";
+
+const MAX_ERROR_LOG_LINES = 25;
+
+function extractErrorLogs(error: unknown): string[] | undefined {
+  if (error instanceof SimulationError && error.logs && error.logs.length > 0) {
+    return error.logs.slice(-MAX_ERROR_LOG_LINES);
+  }
+  return undefined;
+}
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
@@ -65,6 +75,7 @@ export type SellCycleAction = {
   requestedSellAmount?: number;
   txId?: string;
   error?: string;
+  errorLogs?: string[];
 };
 
 export type SellCycleResult = {
@@ -529,7 +540,8 @@ export class SellEngine {
               positionId: position.id,
               status: "failed_submit",
               requestedSellAmount,
-              error: this.toErrorMessage(error)
+              error: this.toErrorMessage(error),
+              errorLogs: extractErrorLogs(error)
             });
           }
         }

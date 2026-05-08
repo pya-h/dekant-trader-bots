@@ -473,7 +473,8 @@ export async function createInitializedApp(
             source: cycle.source,
             botId: action.botId,
             marketId: action.marketId,
-            token: action.token
+            token: action.token,
+            errorLogs: action.errorLogs
           }
         });
       }
@@ -536,7 +537,8 @@ export async function createInitializedApp(
             source: cycle.source,
             botId: action.botId,
             marketId: action.marketId,
-            token: action.token
+            token: action.token,
+            errorLogs: action.errorLogs
           }
         });
       }
