@@ -4,7 +4,9 @@ import {
   ComputeBudgetProgram,
   Transaction
 } from "@solana/web3.js";
-import { Program, BN } from "@coral-xyz/anchor";
+import anchorPkg, { Program } from "@coral-xyz/anchor";
+const { BN } = anchorPkg;
+type BN = InstanceType<typeof anchorPkg.BN>;
 import type { DekantPm } from "./program/dekant_pm.js";
 import {
   deriveProtocolConfig,
