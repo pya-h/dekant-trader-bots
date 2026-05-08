@@ -151,8 +151,7 @@ function createDekantHarness(input: {
       }
 
       return { txId: `sell-${submitSellCalls.length}` };
-    },
-    prepareBotUser: async () => ({ userId: "u1", publicKey: "p1" })
+    }
   };
 
   return {
@@ -253,9 +252,9 @@ describe("full system e2e", () => {
 
     const markets: DekantMarket[] = [
       { id: "m1", subject: "BTC",
-      collateralMint: "Mint11111111111111111111111111111111111111", category: "crypto", status: "open", liquidity: 300_000 },
+      collateralMint: "Mint11111111111111111111111111111111111111", category: "crypto", state: 0, liquidity: 300_000 },
       { id: "m2", subject: "ETH",
-      collateralMint: "Mint11111111111111111111111111111111111111", category: "crypto", status: "open", liquidity: 220_000 }
+      collateralMint: "Mint11111111111111111111111111111111111111", category: "crypto", state: 0, liquidity: 220_000 }
     ];
 
     const positionsByBotId = createPositionsByBot(bots, markets);
@@ -388,17 +387,17 @@ describe("full system e2e", () => {
 
     const markets: DekantMarket[] = [
       { id: "m1", subject: "BTC",
-      collateralMint: "Mint11111111111111111111111111111111111111", category: "crypto", status: "open", liquidity: 400_000 },
+      collateralMint: "Mint11111111111111111111111111111111111111", category: "crypto", state: 0, liquidity: 400_000 },
       { id: "m2", subject: "ETH",
-      collateralMint: "Mint11111111111111111111111111111111111111", category: "crypto", status: "open", liquidity: 300_000 },
+      collateralMint: "Mint11111111111111111111111111111111111111", category: "crypto", state: 0, liquidity: 300_000 },
       { id: "m3", subject: "SOL",
-      collateralMint: "Mint11111111111111111111111111111111111111", category: "crypto", status: "open", liquidity: 260_000 },
+      collateralMint: "Mint11111111111111111111111111111111111111", category: "crypto", state: 0, liquidity: 260_000 },
       { id: "m4", subject: "AVAX",
-      collateralMint: "Mint11111111111111111111111111111111111111", category: "crypto", status: "open", liquidity: 220_000 },
+      collateralMint: "Mint11111111111111111111111111111111111111", category: "crypto", state: 0, liquidity: 220_000 },
       { id: "m5", subject: "XRP",
-      collateralMint: "Mint11111111111111111111111111111111111111", category: "crypto", status: "open", liquidity: 210_000 },
+      collateralMint: "Mint11111111111111111111111111111111111111", category: "crypto", state: 0, liquidity: 210_000 },
       { id: "m6", subject: "DOGE",
-      collateralMint: "Mint11111111111111111111111111111111111111", category: "crypto", status: "open", liquidity: 180_000 }
+      collateralMint: "Mint11111111111111111111111111111111111111", category: "crypto", state: 0, liquidity: 180_000 }
     ];
 
     const positionsByBotId = createPositionsByBot(bots, markets.slice(0, 3));
@@ -486,17 +485,16 @@ describe("full system e2e", () => {
 
     const markets: DekantMarket[] = [
       { id: "m1", subject: "BTC",
-      collateralMint: "Mint11111111111111111111111111111111111111", category: "crypto", status: "open", liquidity: 100_000 },
+      collateralMint: "Mint11111111111111111111111111111111111111", category: "crypto", state: 0, liquidity: 100_000 },
       { id: "m2", subject: "ETH",
-      collateralMint: "Mint11111111111111111111111111111111111111", category: "crypto", status: "open", liquidity: 100_000 }
+      collateralMint: "Mint11111111111111111111111111111111111111", category: "crypto", state: 0, liquidity: 100_000 }
     ];
 
     const firstDekant: DekantClient = {
       fetchMarkets: async () => markets,
       fetchPositions: async () => [],
       submitBuyOrder: async () => ({ txId: "buy-1" }),
-      submitSellOrder: async () => ({ txId: "sell-1" }),
-      prepareBotUser: async () => ({ userId: "u1", publicKey: "p1" })
+      submitSellOrder: async () => ({ txId: "sell-1" })
     };
 
     const first = await createInitializedApp(env, {
@@ -560,8 +558,7 @@ describe("full system e2e", () => {
       fetchMarkets: async () => markets,
       fetchPositions: async () => [],
       submitBuyOrder: async () => ({ txId: "buy-1" }),
-      submitSellOrder: async () => ({ txId: "sell-1" }),
-      prepareBotUser: async () => ({ userId: "u1", publicKey: "p1" })
+      submitSellOrder: async () => ({ txId: "sell-1" })
     };
 
     const second = await createInitializedApp(env, {

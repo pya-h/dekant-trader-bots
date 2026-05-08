@@ -1,5 +1,5 @@
 import { pathToFileURL } from "node:url";
-import { Connection } from "@solana/web3.js";
+import { Connection, PublicKey } from "@solana/web3.js";
 import dotenv from "dotenv";
 import { buildApp } from "./app.js";
 import { bootstrapState } from "./bootstrap.js";
@@ -8,11 +8,14 @@ import { scheduleInitialFundingIfNeeded, TimerProvider } from "./bots/initial-fu
 import { addBotsAndPersist, BotLifecycleDependencies, reconcileAndPersistBots } from "./bots/lifecycle.js";
 import { FaucetClient, HttpFaucetClient } from "./clients/faucet-client.js";
 import { DekantClient, HttpDekantClient } from "./clients/dekant-client.js";
+import { SolanaDekantClient } from "./clients/solana-dekant-client.js";
+import type { BotRecord } from "./state/types.js";
 import { PriceClient } from "./clients/price-client.js";
 import { loadKeypairFromSecret, SolanaVaultClient } from "./clients/solana-vault-client.js";
 import { SolanaBalanceClient } from "./clients/solana-balance-client.js";
 import { BalanceClient, FundingEngine, ManualFundRequest, VaultClient } from "./funding/engine.js";
 import { MarketCache } from "./markets/cache.js";
+import { MintRegistry } from "./clients/mint-registry.js";
 import { runtimeConfigSchema } from "./state/types.js";
 import type { StateStore } from "./storage/state-store.js";
 import { TradeStatsStore } from "./metrics/trade-stats.js";
@@ -80,6 +83,7 @@ export type AppInitializationOptions = {
     client: DekantClient;
     refreshIntervalMs?: number;
     timer?: LoopIntervalProvider;
+    mintRegistry?: MintRegistry;
   };
   buy?: {
     dekant: BuyEngineDekantTradingClient;
@@ -208,7 +212,8 @@ export async function createInitializedApp(
     ? new MarketCache({
         client: options.marketCache.client,
         refreshIntervalMs: options.marketCache.refreshIntervalMs ?? config.intervals.marketRefreshMs,
-        ignoredMarketIds: config.runtime.ignoredMarketIds
+        ignoredMarketIds: config.runtime.ignoredMarketIds,
+        mintRegistry: options.marketCache.mintRegistry
       })
     : null;
   const fundingEngine = options.funding
@@ -1099,12 +1104,19 @@ async function start(): Promise<void> {
 
   const envConfig = loadEnvConfig(process.env);
 
-  const dekantClient = new HttpDekantClient({
+  const httpDekantClient = new HttpDekantClient({
     baseUrl: envConfig.integration.dekantBackendUrl,
     timeoutMs: envConfig.clientDefaults.dekant.requestTimeoutMs,
     retryCount: envConfig.clientDefaults.dekant.retryCount,
     retryBackoffMs: envConfig.clientDefaults.dekant.retryBackoffMs
   });
+
+  // Late-bound bot lookup: createInitializedApp owns the bot state, but we
+  // need the SolanaDekantClient before it runs. After bootstrap returns we
+  // point this at the live bot list so trade calls find each bot's keypair.
+  const botRegistry: { getBots: () => BotRecord[] } = { getBots: () => [] };
+
+  const programId = new PublicKey(envConfig.integration.dekantProgramId);
 
   const faucetClient = new HttpFaucetClient({
     baseUrl: envConfig.integration.dekantBackendUrl,
@@ -1122,6 +1134,20 @@ async function start(): Promise<void> {
   });
 
   const connection = new Connection(envConfig.integration.solanaRpcUrl, "confirmed");
+  const mintRegistry = new MintRegistry({ connection });
+
+  const dekantClient: DekantClient = new SolanaDekantClient({
+    connection,
+    programId,
+    mintRegistry,
+    httpDelegate: httpDekantClient,
+    getBotKeypair: (botId) => {
+      const bot = botRegistry.getBots().find((candidate) => candidate.id === botId);
+      if (!bot) return null;
+      return loadKeypairFromSecret(bot.secretKey);
+    }
+  });
+
   const vaultKeypair = loadKeypairFromSecret(envConfig.vault.secretKey);
   const vaultAddress = vaultKeypair.publicKey.toBase58();
   startupLogger.info?.("vault_loaded", {
@@ -1131,7 +1157,8 @@ async function start(): Promise<void> {
 
   const vaultClient = new SolanaVaultClient({
     connection,
-    vaultKeypair
+    vaultKeypair,
+    mintRegistry
   });
 
   const balanceClient = new SolanaBalanceClient({
@@ -1139,7 +1166,7 @@ async function start(): Promise<void> {
   });
 
   const appCtx = await createInitializedApp(process.env, {
-    marketCache: { client: dekantClient },
+    marketCache: { client: dekantClient, mintRegistry },
     funding: {
       vault: vaultClient,
       balances: balanceClient,
@@ -1151,13 +1178,31 @@ async function start(): Promise<void> {
   });
   const { app, config } = appCtx;
 
+  botRegistry.getBots = () => appCtx.state.botsState.bots;
+
   await app.listen({ host: config.host, port: config.port });
   startupLogger.info?.("server_listening", { host: config.host, port: config.port });
 
   await appCtx.markets?.start({ immediate: true });
-  await appCtx.buy?.start({ immediate: true });
-  await appCtx.sell?.start({ immediate: true });
   await appCtx.funding?.start({ immediate: false });
+
+  // Hold buy/sell loops until initial funding has had time to land on-chain.
+  // Without this, the first cycle fires before bots have any collateral.
+  const initialFundingDelayMs = appCtx.startup.initialFundingScheduled
+    ? (appCtx.startup.initialFundingDelayMs ?? 0)
+    : 0;
+  const tradingStartDelayMs = initialFundingDelayMs + 5_000;
+  if (tradingStartDelayMs > 0) {
+    startupLogger.info?.("trading_loops_deferred", { delayMs: tradingStartDelayMs });
+    setTimeout(() => {
+      void appCtx.buy?.start({ immediate: true });
+      void appCtx.sell?.start({ immediate: true });
+      startupLogger.info?.("trading_loops_started");
+    }, tradingStartDelayMs).unref();
+  } else {
+    await appCtx.buy?.start({ immediate: true });
+    await appCtx.sell?.start({ immediate: true });
+  }
   startupLogger.info?.("server_ready", {
     market: appCtx.markets !== null,
     buy: appCtx.buy !== null,

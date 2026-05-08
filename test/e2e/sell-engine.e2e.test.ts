@@ -21,8 +21,7 @@ function createSellHarness(input: {
     submitSellOrder: async (payload) => {
       submitSellCalls.push(payload);
       return { txId: `sell-${submitSellCalls.length}` };
-    },
-    prepareBotUser: async () => ({ userId: "u1", publicKey: "p1" })
+    }
   };
 
   const priceClient = {
@@ -84,9 +83,9 @@ describe("sell engine integration", () => {
 
     const markets: DekantMarket[] = [
       { id: "m1", subject: "BTC",
-      collateralMint: "Mint11111111111111111111111111111111111111", category: "crypto", status: "open" },
+      collateralMint: "Mint11111111111111111111111111111111111111", category: "crypto", state: 0 },
       { id: "m2", subject: "ETH",
-      collateralMint: "Mint11111111111111111111111111111111111111", category: "crypto", status: "open" }
+      collateralMint: "Mint11111111111111111111111111111111111111", category: "crypto", state: 0 }
     ];
 
     const appBoot = await createInitializedApp(env, {
@@ -153,9 +152,9 @@ describe("sell engine integration", () => {
 
     const markets: DekantMarket[] = [
       { id: "m1", subject: "BTC",
-      collateralMint: "Mint11111111111111111111111111111111111111", category: "crypto", status: "open" },
+      collateralMint: "Mint11111111111111111111111111111111111111", category: "crypto", state: 0 },
       { id: "m2", subject: "ETH",
-      collateralMint: "Mint11111111111111111111111111111111111111", category: "crypto", status: "open" }
+      collateralMint: "Mint11111111111111111111111111111111111111", category: "crypto", state: 0 }
     ];
 
     const appBoot = await createInitializedApp(env, {
@@ -218,7 +217,7 @@ describe("sell engine integration", () => {
     });
 
     const markets: DekantMarket[] = [{ id: "m1", subject: "BTC",
-      collateralMint: "Mint11111111111111111111111111111111111111", category: "crypto", status: "open" }];
+      collateralMint: "Mint11111111111111111111111111111111111111", category: "crypto", state: 0 }];
 
     const appBoot = await createInitializedApp(env, {
       store,

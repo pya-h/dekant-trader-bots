@@ -7,8 +7,7 @@ function makeDekantClient(fetchMarketsImpl: () => Promise<DekantMarket[]>): Deka
     fetchMarkets: fetchMarketsImpl,
     fetchPositions: vi.fn(async () => []),
     submitBuyOrder: vi.fn(async () => ({ txId: "buy" })),
-    submitSellOrder: vi.fn(async () => ({ txId: "sell" })),
-    prepareBotUser: vi.fn(async () => ({ userId: "u", publicKey: "p" }))
+    submitSellOrder: vi.fn(async () => ({ txId: "sell" }))
   };
 }
 
@@ -16,13 +15,13 @@ describe("filterEligibleMarkets", () => {
   it("keeps tradable crypto markets and excludes ignored/non-crypto/closed", () => {
     const markets: DekantMarket[] = [
       { id: "m1", subject: "BTC",
-      collateralMint: "Mint11111111111111111111111111111111111111", category: "crypto", status: "open" },
+      collateralMint: "Mint11111111111111111111111111111111111111", category: "crypto", state: 0 },
       { id: "m2", subject: "ETH",
-      collateralMint: "Mint11111111111111111111111111111111111111", category: "sports", status: "open" },
+      collateralMint: "Mint11111111111111111111111111111111111111", category: "sports", state: 0 },
       { id: "m3", subject: "SOL",
-      collateralMint: "Mint11111111111111111111111111111111111111", category: "crypto", status: "resolved" },
+      collateralMint: "Mint11111111111111111111111111111111111111", category: "crypto", state: 3 },
       { id: "m4", subject: "DOGE",
-      collateralMint: "Mint11111111111111111111111111111111111111", category: "crypto", status: "open" }
+      collateralMint: "Mint11111111111111111111111111111111111111", category: "crypto", state: 0 }
     ];
 
     const result = filterEligibleMarkets({
@@ -43,7 +42,7 @@ describe("MarketCache", () => {
       }
 
       return [{ id: "m1", subject: "BTC",
-      collateralMint: "Mint11111111111111111111111111111111111111", category: "crypto", status: "open" }];
+      collateralMint: "Mint11111111111111111111111111111111111111", category: "crypto", state: 0 }];
     });
 
     const cache = new MarketCache({

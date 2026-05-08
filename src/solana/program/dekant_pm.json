@@ -1,0 +1,3998 @@
+{
+  "address": "4GYvtbs7da26tLaZt9PNQWLesq2riwEN6fi9tGF91A5P",
+  "metadata": {
+    "name": "dekant_pm",
+    "version": "0.1.0",
+    "spec": "0.1.0",
+    "description": "DekantPM prediction market protocol"
+  },
+  "instructions": [
+    {
+      "name": "add_liquidity",
+      "docs": [
+        "Deposit proportional liquidity into a market."
+      ],
+      "discriminator": [
+        181,
+        157,
+        89,
+        67,
+        143,
+        182,
+        52,
+        72
+      ],
+      "accounts": [
+        {
+          "name": "provider",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "market",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  97,
+                  114,
+                  107,
+                  101,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market.market_id",
+                "account": "Market"
+              }
+            ]
+          }
+        },
+        {
+          "name": "lp_position",
+          "docs": [
+            "LP position — created on first deposit."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  112,
+                  95,
+                  112,
+                  111,
+                  115,
+                  105,
+                  116,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market"
+              },
+              {
+                "kind": "account",
+                "path": "provider"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault",
+          "writable": true
+        },
+        {
+          "name": "provider_ata",
+          "writable": true
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "AddLiquidityArgs"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "assign_role",
+      "docs": [
+        "Assign a role (Admin, Oracle, Creator) to a wallet."
+      ],
+      "discriminator": [
+        255,
+        174,
+        125,
+        180,
+        203,
+        155,
+        202,
+        131
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "docs": [
+            "The admin or superadmin assigning the role. Must be mut (pays rent)."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "protocol_config",
+          "docs": [
+            "Protocol config — used to check if authority is superadmin."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  116,
+                  111,
+                  99,
+                  111,
+                  108,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "authority_role",
+          "docs": [
+            "The authority's own role PDA (proves they are admin).",
+            "Optional: not needed if authority == superadmin.",
+            "Validated in handler logic, not in constraints, because it's conditional."
+          ],
+          "optional": true
+        },
+        {
+          "name": "target_user",
+          "docs": [
+            "The wallet receiving the role."
+          ]
+        },
+        {
+          "name": "user_role",
+          "docs": [
+            "UserRole PDA to be created."
+          ],
+          "writable": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "AssignRoleArgs"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "buy",
+      "docs": [
+        "Buy outcome tokens for a single discrete outcome."
+      ],
+      "discriminator": [
+        102,
+        6,
+        61,
+        18,
+        1,
+        218,
+        235,
+        234
+      ],
+      "accounts": [
+        {
+          "name": "trader",
+          "docs": [
+            "The trader placing the buy."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "market",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  97,
+                  114,
+                  107,
+                  101,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market.market_id",
+                "account": "Market"
+              }
+            ]
+          }
+        },
+        {
+          "name": "protocol_config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  116,
+                  111,
+                  99,
+                  111,
+                  108,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "user_position",
+          "docs": [
+            "Trader's position — created on first trade via init_if_needed."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  117,
+                  115,
+                  101,
+                  114,
+                  95,
+                  112,
+                  111,
+                  115,
+                  105,
+                  116,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market"
+              },
+              {
+                "kind": "account",
+                "path": "trader"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault_authority",
+          "docs": [
+            "Vault authority PDA (signs CPI transfers from vault)."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault",
+          "docs": [
+            "Market's collateral vault."
+          ],
+          "writable": true
+        },
+        {
+          "name": "trader_ata",
+          "docs": [
+            "Trader's collateral token account (source of payment)."
+          ],
+          "writable": true
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "BuyArgs"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "buy_distribution",
+      "docs": [
+        "Buy across bins proportional to a Normal(mu, sigma) distribution."
+      ],
+      "discriminator": [
+        81,
+        82,
+        164,
+        124,
+        2,
+        240,
+        199,
+        229
+      ],
+      "accounts": [
+        {
+          "name": "trader",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "market",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  97,
+                  114,
+                  107,
+                  101,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market.market_id",
+                "account": "Market"
+              }
+            ]
+          }
+        },
+        {
+          "name": "protocol_config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  116,
+                  111,
+                  99,
+                  111,
+                  108,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "user_position",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  117,
+                  115,
+                  101,
+                  114,
+                  95,
+                  112,
+                  111,
+                  115,
+                  105,
+                  116,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market"
+              },
+              {
+                "kind": "account",
+                "path": "trader"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault",
+          "writable": true
+        },
+        {
+          "name": "trader_ata",
+          "writable": true
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "BuyDistributionArgs"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "buy_to_price",
+      "docs": [
+        "Buy outcome tokens to reach a target probability."
+      ],
+      "discriminator": [
+        35,
+        254,
+        253,
+        143,
+        228,
+        169,
+        99,
+        124
+      ],
+      "accounts": [
+        {
+          "name": "trader",
+          "docs": [
+            "The trader placing the buy."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "market",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  97,
+                  114,
+                  107,
+                  101,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market.market_id",
+                "account": "Market"
+              }
+            ]
+          }
+        },
+        {
+          "name": "protocol_config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  116,
+                  111,
+                  99,
+                  111,
+                  108,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "user_position",
+          "docs": [
+            "Trader's position — created on first trade via init_if_needed."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  117,
+                  115,
+                  101,
+                  114,
+                  95,
+                  112,
+                  111,
+                  115,
+                  105,
+                  116,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market"
+              },
+              {
+                "kind": "account",
+                "path": "trader"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault_authority",
+          "docs": [
+            "Vault authority PDA (signs CPI transfers from vault)."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault",
+          "docs": [
+            "Market's collateral vault."
+          ],
+          "writable": true
+        },
+        {
+          "name": "trader_ata",
+          "docs": [
+            "Trader's collateral token account (source of payment)."
+          ],
+          "writable": true
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "BuyToPriceArgs"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "claim_payout",
+      "docs": [
+        "Claim payout from a resolved market."
+      ],
+      "discriminator": [
+        127,
+        240,
+        132,
+        62,
+        227,
+        198,
+        146,
+        133
+      ],
+      "accounts": [
+        {
+          "name": "trader",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "market",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  97,
+                  114,
+                  107,
+                  101,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market.market_id",
+                "account": "Market"
+              }
+            ]
+          },
+          "relations": [
+            "user_position"
+          ]
+        },
+        {
+          "name": "protocol_config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  116,
+                  111,
+                  99,
+                  111,
+                  108,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "user_position",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  117,
+                  115,
+                  101,
+                  114,
+                  95,
+                  112,
+                  111,
+                  115,
+                  105,
+                  116,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market"
+              },
+              {
+                "kind": "account",
+                "path": "trader"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault",
+          "writable": true
+        },
+        {
+          "name": "trader_ata",
+          "docs": [
+            "Trader's collateral token account (receives payout)."
+          ],
+          "writable": true
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "collect_fees",
+      "docs": [
+        "Sweep accumulated protocol fees from a market's vault to the treasury."
+      ],
+      "discriminator": [
+        164,
+        152,
+        207,
+        99,
+        30,
+        186,
+        19,
+        182
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "docs": [
+            "Anyone can call — pays the transaction fee."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "protocol_config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  116,
+                  111,
+                  99,
+                  111,
+                  108,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "market",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  97,
+                  114,
+                  107,
+                  101,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market.market_id",
+                "account": "Market"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault",
+          "writable": true
+        },
+        {
+          "name": "treasury_ata",
+          "docs": [
+            "Treasury's collateral token account (receives fees)."
+          ],
+          "writable": true
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "create_market",
+      "docs": [
+        "Create a new prediction market with initial liquidity."
+      ],
+      "discriminator": [
+        103,
+        226,
+        97,
+        235,
+        200,
+        188,
+        251,
+        254
+      ],
+      "accounts": [
+        {
+          "name": "creator",
+          "docs": [
+            "Market creator. Pays rent and initial liquidity."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "creator_role",
+          "docs": [
+            "Creator's role PDA (Creator, Admin, or Superadmin)."
+          ],
+          "optional": true
+        },
+        {
+          "name": "protocol_config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  116,
+                  111,
+                  99,
+                  111,
+                  108,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "oracle_role",
+          "docs": [
+            "Oracle's role PDA — verifies the oracle has the Oracle role."
+          ]
+        },
+        {
+          "name": "market",
+          "docs": [
+            "Market account to be created."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  97,
+                  114,
+                  107,
+                  101,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "protocol_config.market_count",
+                "account": "ProtocolConfig"
+              }
+            ]
+          }
+        },
+        {
+          "name": "collateral_mint",
+          "docs": [
+            "The collateral token mint (e.g. USDC)."
+          ]
+        },
+        {
+          "name": "vault_authority",
+          "docs": [
+            "Vault authority PDA — owns the vault token account. Does not hold data."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault",
+          "docs": [
+            "Vault token account — holds collateral for this market."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "creator_ata",
+          "docs": [
+            "Creator's associated token account (source of initial liquidity)."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "creator"
+              },
+              {
+                "kind": "const",
+                "value": [
+                  6,
+                  221,
+                  246,
+                  225,
+                  215,
+                  101,
+                  161,
+                  147,
+                  217,
+                  203,
+                  225,
+                  70,
+                  206,
+                  235,
+                  121,
+                  172,
+                  28,
+                  180,
+                  133,
+                  237,
+                  95,
+                  91,
+                  55,
+                  145,
+                  58,
+                  140,
+                  245,
+                  133,
+                  126,
+                  255,
+                  0,
+                  169
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "collateral_mint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        },
+        {
+          "name": "creator_lp_position",
+          "docs": [
+            "LP position for the creator (receives initial LP shares)."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  112,
+                  95,
+                  112,
+                  111,
+                  115,
+                  105,
+                  116,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market"
+              },
+              {
+                "kind": "account",
+                "path": "creator"
+              }
+            ]
+          }
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "associated_token_program",
+          "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "CreateMarketArgs"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "initialize",
+      "docs": [
+        "One-time protocol initialization. Sets superadmin, treasury, and default fees."
+      ],
+      "discriminator": [
+        175,
+        175,
+        109,
+        31,
+        13,
+        152,
+        155,
+        237
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "docs": [
+            "The deployer who becomes superadmin."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "protocol_config",
+          "docs": [
+            "Protocol config singleton. Created once."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  116,
+                  111,
+                  99,
+                  111,
+                  108,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "InitializeArgs"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "pause_market",
+      "docs": [
+        "Pause an active market (freezes all trading)."
+      ],
+      "discriminator": [
+        216,
+        238,
+        4,
+        164,
+        65,
+        11,
+        162,
+        91
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "docs": [
+            "Admin or superadmin."
+          ],
+          "signer": true
+        },
+        {
+          "name": "protocol_config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  116,
+                  111,
+                  99,
+                  111,
+                  108,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "authority_role",
+          "docs": [
+            "Authority's admin role PDA (if not superadmin)."
+          ],
+          "optional": true
+        },
+        {
+          "name": "market",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  97,
+                  114,
+                  107,
+                  101,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market.market_id",
+                "account": "Market"
+              }
+            ]
+          }
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "remove_liquidity",
+      "docs": [
+        "Withdraw proportional liquidity from a market."
+      ],
+      "discriminator": [
+        80,
+        85,
+        209,
+        72,
+        24,
+        206,
+        177,
+        108
+      ],
+      "accounts": [
+        {
+          "name": "provider",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "market",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  97,
+                  114,
+                  107,
+                  101,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market.market_id",
+                "account": "Market"
+              }
+            ]
+          },
+          "relations": [
+            "lp_position"
+          ]
+        },
+        {
+          "name": "lp_position",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  112,
+                  95,
+                  112,
+                  111,
+                  115,
+                  105,
+                  116,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market"
+              },
+              {
+                "kind": "account",
+                "path": "provider"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault",
+          "writable": true
+        },
+        {
+          "name": "provider_ata",
+          "writable": true
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        }
+      ],
+      "args": [
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "RemoveLiquidityArgs"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "resolve_market",
+      "docs": [
+        "Oracle submits the resolved outcome."
+      ],
+      "discriminator": [
+        155,
+        23,
+        80,
+        173,
+        46,
+        74,
+        23,
+        239
+      ],
+      "accounts": [
+        {
+          "name": "oracle",
+          "docs": [
+            "The assigned oracle. Must match market.oracle."
+          ],
+          "signer": true
+        },
+        {
+          "name": "market",
+          "writable": true
+        }
+      ],
+      "args": [
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "ResolveMarketArgs"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "revoke_role",
+      "docs": [
+        "Revoke a role from a wallet (closes the UserRole PDA)."
+      ],
+      "discriminator": [
+        179,
+        232,
+        2,
+        180,
+        48,
+        227,
+        82,
+        7
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "docs": [
+            "The admin or superadmin revoking the role. Receives reclaimed rent."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "protocol_config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  116,
+                  111,
+                  99,
+                  111,
+                  108,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "authority_role",
+          "docs": [
+            "Authority's own role PDA (if admin, not superadmin)."
+          ],
+          "optional": true
+        },
+        {
+          "name": "target_user",
+          "docs": [
+            "The wallet whose role is being revoked."
+          ]
+        },
+        {
+          "name": "user_role",
+          "docs": [
+            "UserRole PDA to be closed. Rent returned to authority."
+          ],
+          "writable": true
+        }
+      ],
+      "args": [
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "RevokeRoleArgs"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "sell",
+      "docs": [
+        "Sell outcome tokens for a single discrete outcome."
+      ],
+      "discriminator": [
+        51,
+        230,
+        133,
+        164,
+        1,
+        127,
+        131,
+        173
+      ],
+      "accounts": [
+        {
+          "name": "trader",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "market",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  97,
+                  114,
+                  107,
+                  101,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market.market_id",
+                "account": "Market"
+              }
+            ]
+          },
+          "relations": [
+            "user_position"
+          ]
+        },
+        {
+          "name": "protocol_config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  116,
+                  111,
+                  99,
+                  111,
+                  108,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "user_position",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  117,
+                  115,
+                  101,
+                  114,
+                  95,
+                  112,
+                  111,
+                  115,
+                  105,
+                  116,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market"
+              },
+              {
+                "kind": "account",
+                "path": "trader"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault",
+          "writable": true
+        },
+        {
+          "name": "trader_ata",
+          "docs": [
+            "Trader's collateral token account (receives payment)."
+          ],
+          "writable": true
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        }
+      ],
+      "args": [
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "SellArgs"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "sell_distribution",
+      "docs": [
+        "Sell across bins proportional to a Normal(mu, sigma) distribution."
+      ],
+      "discriminator": [
+        232,
+        149,
+        36,
+        68,
+        96,
+        184,
+        140,
+        73
+      ],
+      "accounts": [
+        {
+          "name": "trader",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "market",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  97,
+                  114,
+                  107,
+                  101,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market.market_id",
+                "account": "Market"
+              }
+            ]
+          },
+          "relations": [
+            "user_position"
+          ]
+        },
+        {
+          "name": "protocol_config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  116,
+                  111,
+                  99,
+                  111,
+                  108,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "user_position",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  117,
+                  115,
+                  101,
+                  114,
+                  95,
+                  112,
+                  111,
+                  115,
+                  105,
+                  116,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market"
+              },
+              {
+                "kind": "account",
+                "path": "trader"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault",
+          "writable": true
+        },
+        {
+          "name": "trader_ata",
+          "writable": true
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        }
+      ],
+      "args": [
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "SellDistributionArgs"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "sell_to_price",
+      "docs": [
+        "Sell outcome tokens to reach a target probability."
+      ],
+      "discriminator": [
+        69,
+        149,
+        213,
+        52,
+        140,
+        91,
+        216,
+        237
+      ],
+      "accounts": [
+        {
+          "name": "trader",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "market",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  97,
+                  114,
+                  107,
+                  101,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market.market_id",
+                "account": "Market"
+              }
+            ]
+          },
+          "relations": [
+            "user_position"
+          ]
+        },
+        {
+          "name": "protocol_config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  116,
+                  111,
+                  99,
+                  111,
+                  108,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "user_position",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  117,
+                  115,
+                  101,
+                  114,
+                  95,
+                  112,
+                  111,
+                  115,
+                  105,
+                  116,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market"
+              },
+              {
+                "kind": "account",
+                "path": "trader"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault",
+          "writable": true
+        },
+        {
+          "name": "trader_ata",
+          "docs": [
+            "Trader's collateral token account (receives payment)."
+          ],
+          "writable": true
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        }
+      ],
+      "args": [
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "SellToPriceArgs"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "unpause_market",
+      "docs": [
+        "Unpause a paused market. If deadline has passed, transitions to PendingResolution."
+      ],
+      "discriminator": [
+        219,
+        203,
+        199,
+        170,
+        212,
+        45,
+        170,
+        80
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "docs": [
+            "Admin or superadmin."
+          ],
+          "signer": true
+        },
+        {
+          "name": "protocol_config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  116,
+                  111,
+                  99,
+                  111,
+                  108,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "authority_role",
+          "docs": [
+            "Authority's admin role PDA (if not superadmin)."
+          ],
+          "optional": true
+        },
+        {
+          "name": "market",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  97,
+                  114,
+                  107,
+                  101,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market.market_id",
+                "account": "Market"
+              }
+            ]
+          }
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "update_fees",
+      "docs": [
+        "Update protocol fee parameters (superadmin only)."
+      ],
+      "discriminator": [
+        225,
+        27,
+        13,
+        6,
+        69,
+        84,
+        172,
+        191
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "docs": [
+            "Must be the superadmin."
+          ],
+          "signer": true
+        },
+        {
+          "name": "protocol_config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  116,
+                  111,
+                  99,
+                  111,
+                  108,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "UpdateFeesArgs"
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "accounts": [
+    {
+      "name": "LpPosition",
+      "discriminator": [
+        105,
+        241,
+        37,
+        200,
+        224,
+        2,
+        252,
+        90
+      ]
+    },
+    {
+      "name": "Market",
+      "discriminator": [
+        219,
+        190,
+        213,
+        55,
+        0,
+        227,
+        198,
+        154
+      ]
+    },
+    {
+      "name": "ProtocolConfig",
+      "discriminator": [
+        207,
+        91,
+        250,
+        28,
+        152,
+        179,
+        215,
+        209
+      ]
+    },
+    {
+      "name": "UserPosition",
+      "discriminator": [
+        251,
+        248,
+        209,
+        245,
+        83,
+        234,
+        17,
+        27
+      ]
+    },
+    {
+      "name": "UserRole",
+      "discriminator": [
+        62,
+        252,
+        194,
+        137,
+        183,
+        165,
+        147,
+        28
+      ]
+    }
+  ],
+  "events": [
+    {
+      "name": "FeesCollected",
+      "discriminator": [
+        233,
+        23,
+        117,
+        225,
+        107,
+        178,
+        254,
+        8
+      ]
+    },
+    {
+      "name": "FeesUpdated",
+      "discriminator": [
+        65,
+        34,
+        234,
+        59,
+        248,
+        242,
+        101,
+        118
+      ]
+    },
+    {
+      "name": "LiquidityChanged",
+      "discriminator": [
+        132,
+        132,
+        193,
+        214,
+        12,
+        99,
+        40,
+        28
+      ]
+    },
+    {
+      "name": "MarketCreated",
+      "discriminator": [
+        88,
+        184,
+        130,
+        231,
+        226,
+        84,
+        6,
+        58
+      ]
+    },
+    {
+      "name": "MarketPaused",
+      "discriminator": [
+        174,
+        108,
+        119,
+        17,
+        118,
+        97,
+        185,
+        4
+      ]
+    },
+    {
+      "name": "MarketResolved",
+      "discriminator": [
+        89,
+        67,
+        230,
+        95,
+        143,
+        106,
+        199,
+        202
+      ]
+    },
+    {
+      "name": "MarketUnpaused",
+      "discriminator": [
+        191,
+        149,
+        243,
+        234,
+        175,
+        225,
+        179,
+        126
+      ]
+    },
+    {
+      "name": "PayoutClaimed",
+      "discriminator": [
+        200,
+        39,
+        105,
+        112,
+        116,
+        63,
+        58,
+        149
+      ]
+    },
+    {
+      "name": "RoleAssigned",
+      "discriminator": [
+        15,
+        207,
+        225,
+        171,
+        169,
+        117,
+        98,
+        131
+      ]
+    },
+    {
+      "name": "RoleRevoked",
+      "discriminator": [
+        167,
+        183,
+        52,
+        229,
+        126,
+        206,
+        62,
+        61
+      ]
+    },
+    {
+      "name": "TradePlaced",
+      "discriminator": [
+        86,
+        63,
+        114,
+        34,
+        82,
+        86,
+        59,
+        156
+      ]
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "Unauthorized",
+      "msg": "Signer does not have the required role"
+    },
+    {
+      "code": 6001,
+      "name": "InvalidRole",
+      "msg": "Invalid role type"
+    },
+    {
+      "code": 6002,
+      "name": "RoleAlreadyAssigned",
+      "msg": "This role is already assigned to the target wallet"
+    },
+    {
+      "code": 6003,
+      "name": "AdminCannotAssignAdmin",
+      "msg": "Admin cannot assign the Admin role; only superadmin can"
+    },
+    {
+      "code": 6004,
+      "name": "MarketNotActive",
+      "msg": "Market is not in Active state"
+    },
+    {
+      "code": 6005,
+      "name": "MarketClosed",
+      "msg": "Market deadline has passed; no more trading"
+    },
+    {
+      "code": 6006,
+      "name": "MarketNotPendingResolution",
+      "msg": "Market is not in PendingResolution state"
+    },
+    {
+      "code": 6007,
+      "name": "MarketAlreadyResolved",
+      "msg": "Market has already been resolved"
+    },
+    {
+      "code": 6008,
+      "name": "MarketPaused",
+      "msg": "Market is paused"
+    },
+    {
+      "code": 6009,
+      "name": "MarketNotPaused",
+      "msg": "Market is not paused"
+    },
+    {
+      "code": 6010,
+      "name": "MarketNotResolved",
+      "msg": "Market is not in Resolved state"
+    },
+    {
+      "code": 6011,
+      "name": "InvalidOutcome",
+      "msg": "Invalid outcome index"
+    },
+    {
+      "code": 6012,
+      "name": "InvalidRange",
+      "msg": "range_max must be greater than range_min"
+    },
+    {
+      "code": 6013,
+      "name": "InvalidDeadline",
+      "msg": "Deadline must be in the future"
+    },
+    {
+      "code": 6014,
+      "name": "InvalidNumOutcomes",
+      "msg": "Number of outcomes is out of allowed bounds"
+    },
+    {
+      "code": 6015,
+      "name": "InvalidMarketType",
+      "msg": "Invalid market type"
+    },
+    {
+      "code": 6016,
+      "name": "BinCountExceeded",
+      "msg": "Bin count exceeds maximum"
+    },
+    {
+      "code": 6017,
+      "name": "InsufficientBalance",
+      "msg": "Insufficient collateral balance"
+    },
+    {
+      "code": 6018,
+      "name": "InsufficientLiquidity",
+      "msg": "Insufficient liquidity in the AMM"
+    },
+    {
+      "code": 6019,
+      "name": "InsufficientHoldings",
+      "msg": "Insufficient token holdings to sell"
+    },
+    {
+      "code": 6020,
+      "name": "TradeTooSmall",
+      "msg": "Trade amount is below the minimum"
+    },
+    {
+      "code": 6021,
+      "name": "InvalidSigma",
+      "msg": "Sigma must be greater than zero"
+    },
+    {
+      "code": 6022,
+      "name": "WrongMarketType",
+      "msg": "This instruction is not valid for this market type"
+    },
+    {
+      "code": 6023,
+      "name": "InvalidProbability",
+      "msg": "Target probability out of valid range"
+    },
+    {
+      "code": 6024,
+      "name": "TargetAlreadyMet",
+      "msg": "Target probability is already met or on the wrong side of current price"
+    },
+    {
+      "code": 6025,
+      "name": "MaxCollateralExceeded",
+      "msg": "Required collateral exceeds max_collateral"
+    },
+    {
+      "code": 6026,
+      "name": "MinCollateralNotMet",
+      "msg": "Returned collateral is below min_collateral_out"
+    },
+    {
+      "code": 6027,
+      "name": "AlreadyClaimed",
+      "msg": "Payout has already been claimed"
+    },
+    {
+      "code": 6028,
+      "name": "NothingToClaim",
+      "msg": "No winning tokens held; nothing to claim"
+    },
+    {
+      "code": 6029,
+      "name": "InvariantViolation",
+      "msg": "L2-norm invariant violated after operation"
+    },
+    {
+      "code": 6030,
+      "name": "MathOverflow",
+      "msg": "Arithmetic overflow"
+    },
+    {
+      "code": 6031,
+      "name": "DivisionByZero",
+      "msg": "Division by zero"
+    },
+    {
+      "code": 6032,
+      "name": "SqrtFailed",
+      "msg": "Square root computation failed"
+    },
+    {
+      "code": 6033,
+      "name": "FeeTooHigh",
+      "msg": "Fee exceeds the maximum allowed basis points"
+    },
+    {
+      "code": 6034,
+      "name": "NoFeesToCollect",
+      "msg": "No protocol fees to collect"
+    },
+    {
+      "code": 6035,
+      "name": "InsufficientShares",
+      "msg": "Cannot remove more LP shares than held"
+    },
+    {
+      "code": 6036,
+      "name": "LiquidityTooSmall",
+      "msg": "Liquidity amount is below the minimum"
+    },
+    {
+      "code": 6037,
+      "name": "ResolvedValueOutOfRange",
+      "msg": "Resolved value is outside the market range"
+    },
+    {
+      "code": 6038,
+      "name": "WrongOracle",
+      "msg": "Signer is not the assigned oracle for this market"
+    }
+  ],
+  "types": [
+    {
+      "name": "AddLiquidityArgs",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "amount",
+            "docs": [
+              "Amount of collateral to deposit as liquidity (token-native units)."
+            ],
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "AssignRoleArgs",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "role",
+            "docs": [
+              "Role to assign (1=Admin, 2=Oracle, 3=Creator)."
+            ],
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "BuyArgs",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "outcome",
+            "docs": [
+              "Which outcome to buy (0..num_outcomes-1)."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "collateral_amount",
+            "docs": [
+              "Amount of collateral to spend (token-native units, e.g. USDC micro-units)."
+            ],
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "BuyDistributionArgs",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "mu",
+            "docs": [
+              "Center of the Normal distribution (same scale as market.range_min/max)."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "sigma",
+            "docs": [
+              "Standard deviation of the Normal distribution (same scale, must be > 0)."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "collateral_amount",
+            "docs": [
+              "Amount of collateral to spend (token-native units)."
+            ],
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "BuyToPriceArgs",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "outcome",
+            "docs": [
+              "Which outcome to buy (0..num_outcomes-1)."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "target_probability",
+            "docs": [
+              "Target probability for this outcome, scaled to SCALE (e.g. 700_000_000 = 70%)."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "max_collateral",
+            "docs": [
+              "Maximum gross collateral the trader is willing to pay (slippage protection)."
+            ],
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "CreateMarketArgs",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "market_type",
+            "docs": [
+              "0 = Binary, 1 = Multi, 2 = Continuous."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "num_outcomes",
+            "docs": [
+              "Number of outcomes (binary=2, multi=3..32) or bins (continuous=2..256)."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "deadline",
+            "docs": [
+              "Unix timestamp deadline."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "oracle",
+            "docs": [
+              "Oracle wallet authorized to resolve."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "initial_liquidity",
+            "docs": [
+              "Collateral to deposit as initial liquidity (token-native units)."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "range_min",
+            "docs": [
+              "Lower bound of continuous range (scaled 10^9). 0 for discrete."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "range_max",
+            "docs": [
+              "Upper bound of continuous range (scaled 10^9). 0 for discrete."
+            ],
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "FeesCollected",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "market_id",
+            "type": "u64"
+          },
+          {
+            "name": "collector",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "FeesUpdated",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "creation_fee_bps",
+            "type": "u16"
+          },
+          {
+            "name": "trade_fee_bps",
+            "type": "u16"
+          },
+          {
+            "name": "redemption_fee_bps",
+            "type": "u16"
+          },
+          {
+            "name": "lp_fee_share_bps",
+            "type": "u16"
+          }
+        ]
+      }
+    },
+    {
+      "name": "InitializeArgs",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "treasury",
+            "docs": [
+              "Wallet that receives protocol fees."
+            ],
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "LiquidityChanged",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "market_id",
+            "type": "u64"
+          },
+          {
+            "name": "provider",
+            "type": "pubkey"
+          },
+          {
+            "name": "is_add",
+            "type": "bool"
+          },
+          {
+            "name": "collateral_amount",
+            "type": "u64"
+          },
+          {
+            "name": "shares_changed",
+            "type": "u128"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "LpPosition",
+      "docs": [
+        "An LP's share in a specific market's liquidity pool.",
+        "Seeds: [\"lp_position\", market_pubkey, user_pubkey]"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "version",
+            "docs": [
+              "Schema version."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "market",
+            "docs": [
+              "The market this LP position belongs to."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "user",
+            "docs": [
+              "The LP's wallet."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "shares",
+            "docs": [
+              "Number of LP shares held. Proportional to the LP's fraction of the pool."
+            ],
+            "type": "u128"
+          },
+          {
+            "name": "deposited_collateral",
+            "docs": [
+              "Cumulative collateral deposited as liquidity."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "bump",
+            "docs": [
+              "PDA bump seed."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "_padding",
+            "docs": [
+              "Reserved for future fields."
+            ],
+            "type": {
+              "array": [
+                "u8",
+                16
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "Market",
+      "docs": [
+        "A prediction market with its AMM state.",
+        "Unified struct for binary, multi-outcome, and continuous (binned) markets.",
+        "Seeds: [\"market\", market_id.to_le_bytes()]"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "version",
+            "docs": [
+              "Schema version for upgrade-safe deserialization."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "market_id",
+            "docs": [
+              "Unique, auto-incremented market identifier."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "market_type",
+            "docs": [
+              "0 = Binary, 1 = Multi-outcome, 2 = Continuous. See MarketType."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "state",
+            "docs": [
+              "Current lifecycle state. See MarketState."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "creator",
+            "docs": [
+              "Wallet that created this market."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "oracle",
+            "docs": [
+              "Oracle wallet authorized to resolve this market."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "collateral_mint",
+            "docs": [
+              "SPL token mint used as collateral (e.g. USDC)."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "vault",
+            "docs": [
+              "Address of the SPL token vault holding collateral."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "deadline",
+            "docs": [
+              "Unix timestamp after which trading stops and resolution can begin."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "created_at",
+            "docs": [
+              "Unix timestamp of market creation."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "resolved_at",
+            "docs": [
+              "Unix timestamp of resolution (0 until resolved)."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "num_outcomes",
+            "docs": [
+              "Number of outcomes (binary = 2, multi ≤ 32) or bins (continuous ≤ 256).",
+              "Determines the length of the `reserves` vector."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "k_squared",
+            "docs": [
+              "Squared L2-norm invariant: Σ reserves[i]² = k_squared.",
+              "Stored as u128 to avoid overflow on sums of u64 squares."
+            ],
+            "type": "u128"
+          },
+          {
+            "name": "total_minted",
+            "docs": [
+              "Total collateral deposited as complete sets (token-native units).",
+              "At any time: ∀ i, total_minted = reserves[i] + Σ_users(holdings[i])."
+            ],
+            "type": "u128"
+          },
+          {
+            "name": "lp_shares_total",
+            "docs": [
+              "Total outstanding LP shares across all providers."
+            ],
+            "type": "u128"
+          },
+          {
+            "name": "lp_fee_accumulated",
+            "docs": [
+              "Accumulated LP fee portion (collateral-native units).",
+              "Paid out proportionally when LPs remove liquidity."
+            ],
+            "type": "u128"
+          },
+          {
+            "name": "protocol_fee_accumulated",
+            "docs": [
+              "Accumulated protocol fee (collateral-native units).",
+              "Swept to treasury via `collect_fees` instruction."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "range_min",
+            "docs": [
+              "Lower bound of the continuous outcome range (scaled by 10^9).",
+              "0 for discrete markets."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "range_max",
+            "docs": [
+              "Upper bound of the continuous outcome range (scaled by 10^9).",
+              "0 for discrete markets."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "resolved_outcome",
+            "docs": [
+              "Index of the winning outcome (binary/multi) or winning bin (continuous).",
+              "Only meaningful when state == Resolved."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "resolved_value",
+            "docs": [
+              "Exact resolved value for continuous markets (same scale as range_min/max).",
+              "0 for discrete markets."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "bump",
+            "docs": [
+              "Market PDA bump seed."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "vault_authority_bump",
+            "docs": [
+              "Vault authority PDA bump seed (for CPI signing)."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "_padding",
+            "docs": [
+              "Reserved for future schema versions. Consumed from the front",
+              "when new fields are added; total byte offset of `reserves` stays",
+              "constant for a given padding size."
+            ],
+            "type": {
+              "array": [
+                "u8",
+                30
+              ]
+            }
+          },
+          {
+            "name": "reserves",
+            "docs": [
+              "AMM reserves per outcome/bin.",
+              "Length = num_outcomes. Serialized as Borsh Vec (4-byte length prefix + data)."
+            ],
+            "type": {
+              "vec": "u64"
+            }
+          },
+          {
+            "name": "trader_token_totals",
+            "docs": [
+              "Total trader-held tokens per outcome/bin (sum of all UserPosition holdings).",
+              "Maintained by buy/sell instructions. Used at resolution to compute the",
+              "true LP residual: `total_minted - trader_token_totals[win]`.",
+              "Without this, `reserves[win]` diverges from the LP residual after LP",
+              "operations scale positions without changing trader holdings."
+            ],
+            "type": {
+              "vec": "u64"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "MarketCreated",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "market_id",
+            "type": "u64"
+          },
+          {
+            "name": "market_type",
+            "type": "u8"
+          },
+          {
+            "name": "creator",
+            "type": "pubkey"
+          },
+          {
+            "name": "oracle",
+            "type": "pubkey"
+          },
+          {
+            "name": "collateral_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "deadline",
+            "type": "i64"
+          },
+          {
+            "name": "num_outcomes",
+            "type": "u16"
+          },
+          {
+            "name": "initial_liquidity",
+            "type": "u64"
+          },
+          {
+            "name": "range_min",
+            "type": "i64"
+          },
+          {
+            "name": "range_max",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "MarketPaused",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "market_id",
+            "type": "u64"
+          },
+          {
+            "name": "admin",
+            "type": "pubkey"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "MarketResolved",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "market_id",
+            "type": "u64"
+          },
+          {
+            "name": "oracle",
+            "type": "pubkey"
+          },
+          {
+            "name": "resolved_outcome",
+            "type": "u16"
+          },
+          {
+            "name": "resolved_value",
+            "type": "i64"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "MarketUnpaused",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "market_id",
+            "type": "u64"
+          },
+          {
+            "name": "admin",
+            "type": "pubkey"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "PayoutClaimed",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "market_id",
+            "type": "u64"
+          },
+          {
+            "name": "trader",
+            "type": "pubkey"
+          },
+          {
+            "name": "gross_amount",
+            "type": "u64"
+          },
+          {
+            "name": "fee_paid",
+            "type": "u64"
+          },
+          {
+            "name": "net_amount",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ProtocolConfig",
+      "docs": [
+        "Singleton global configuration for the DekantPM protocol.",
+        "Seeds: [\"protocol_config\"]"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "version",
+            "docs": [
+              "Schema version for future migrations."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "superadmin",
+            "docs": [
+              "Wallet with full administrative authority (role assignment, fee updates)."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "treasury",
+            "docs": [
+              "Destination wallet for collected protocol fees."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "market_count",
+            "docs": [
+              "Auto-incrementing counter; next market gets this ID, then it increments."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "creation_fee_bps",
+            "docs": [
+              "Fee charged when a new market is created (basis points of initial liquidity)."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "trade_fee_bps",
+            "docs": [
+              "Fee charged on every buy/sell trade (basis points of collateral amount)."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "redemption_fee_bps",
+            "docs": [
+              "Fee charged when a trader redeems a winning payout (basis points of gross payout)."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "lp_fee_share_bps",
+            "docs": [
+              "Fraction of the trade fee directed to LPs (basis points of the trade fee itself).",
+              "Remainder goes to protocol_fee_accumulated."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "bump",
+            "docs": [
+              "PDA bump seed."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "_padding",
+            "docs": [
+              "Reserved for future fields."
+            ],
+            "type": {
+              "array": [
+                "u8",
+                64
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "RemoveLiquidityArgs",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "shares_to_burn",
+            "docs": [
+              "Number of LP shares to burn."
+            ],
+            "type": "u128"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ResolveMarketArgs",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "outcome",
+            "docs": [
+              "Winning outcome index (binary: 0 or 1, multi: 0..N-1).",
+              "For continuous markets, this is ignored (computed from `value`)."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "value",
+            "docs": [
+              "Exact resolved value for continuous markets (scaled same as range_min/max).",
+              "Set to 0 for binary/multi markets."
+            ],
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "RevokeRoleArgs",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "role",
+            "docs": [
+              "Role to revoke (1=Admin, 2=Oracle, 3=Creator)."
+            ],
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "RoleAssigned",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "user",
+            "type": "pubkey"
+          },
+          {
+            "name": "role",
+            "type": "u8"
+          },
+          {
+            "name": "assigned_by",
+            "type": "pubkey"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "RoleRevoked",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "user",
+            "type": "pubkey"
+          },
+          {
+            "name": "role",
+            "type": "u8"
+          },
+          {
+            "name": "revoked_by",
+            "type": "pubkey"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "SellArgs",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "outcome",
+            "docs": [
+              "Which outcome to sell (0..num_outcomes-1)."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "token_amount",
+            "docs": [
+              "Number of outcome tokens to sell back to the AMM."
+            ],
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "SellDistributionArgs",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "mu",
+            "docs": [
+              "Center of the Normal distribution describing which bins to sell from."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "sigma",
+            "docs": [
+              "Standard deviation."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "token_amount",
+            "docs": [
+              "Total tokens to sell (distributed proportionally across bins)."
+            ],
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "SellToPriceArgs",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "outcome",
+            "docs": [
+              "Which outcome to sell (0..num_outcomes-1)."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "target_probability",
+            "docs": [
+              "Target probability for this outcome, scaled to SCALE (e.g. 300_000_000 = 30%).",
+              "Use 0 to sell the entire position."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "min_collateral_out",
+            "docs": [
+              "Minimum net collateral the trader is willing to receive (slippage protection)."
+            ],
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "TradePlaced",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "market_id",
+            "type": "u64"
+          },
+          {
+            "name": "trader",
+            "type": "pubkey"
+          },
+          {
+            "name": "is_buy",
+            "type": "bool"
+          },
+          {
+            "name": "collateral_amount",
+            "docs": [
+              "Collateral paid (buy) or received (sell), before/after fees."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "outcome_index",
+            "docs": [
+              "Outcome index for discrete trades; 0 for distribution trades."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "mu",
+            "docs": [
+              "Distribution center (continuous only; 0 for discrete)."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "sigma",
+            "docs": [
+              "Distribution width (continuous only; 0 for discrete)."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "tokens_transacted",
+            "docs": [
+              "Total outcome tokens transacted across all bins/outcomes."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "fee_paid",
+            "type": "u64"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "UpdateFeesArgs",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "creation_fee_bps",
+            "type": "u16"
+          },
+          {
+            "name": "trade_fee_bps",
+            "type": "u16"
+          },
+          {
+            "name": "redemption_fee_bps",
+            "type": "u16"
+          },
+          {
+            "name": "lp_fee_share_bps",
+            "type": "u16"
+          }
+        ]
+      }
+    },
+    {
+      "name": "UserPosition",
+      "docs": [
+        "A trader's token holdings in a specific market.",
+        "Seeds: [\"user_position\", market_pubkey, user_pubkey]"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "version",
+            "docs": [
+              "Schema version."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "market",
+            "docs": [
+              "The market this position belongs to."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "user",
+            "docs": [
+              "The trader's wallet."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "total_deposited",
+            "docs": [
+              "Cumulative collateral deposited into this market by this trader."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "total_withdrawn",
+            "docs": [
+              "Cumulative collateral withdrawn from this market by this trader."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "claimed",
+            "docs": [
+              "Whether the post-resolution payout has been claimed."
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "bump",
+            "docs": [
+              "PDA bump seed."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "_padding",
+            "docs": [
+              "Reserved for future fields."
+            ],
+            "type": {
+              "array": [
+                "u8",
+                16
+              ]
+            }
+          },
+          {
+            "name": "holdings",
+            "docs": [
+              "Token holdings per outcome/bin.",
+              "Length = market.num_outcomes.",
+              "holdings[i] = number of outcome-i tokens this trader owns."
+            ],
+            "type": {
+              "vec": "u64"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "UserRole",
+      "docs": [
+        "A role assignment for a single (user, role) pair.",
+        "Existence of this PDA means the role is active; closing it revokes the role.",
+        "Seeds: [\"user_role\", user_pubkey, role_type_u8]"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "version",
+            "docs": [
+              "Schema version."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "user",
+            "docs": [
+              "The wallet this role is assigned to."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "role",
+            "docs": [
+              "Role type (see Role enum below)."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "assigned_by",
+            "docs": [
+              "Wallet that granted this role."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "assigned_at",
+            "docs": [
+              "Unix timestamp of assignment."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "bump",
+            "docs": [
+              "PDA bump seed."
+            ],
+            "type": "u8"
+          }
+        ]
+      }
+    }
+  ]
+}
