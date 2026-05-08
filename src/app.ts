@@ -37,6 +37,12 @@ type StatsPage = {
   generatedAt: string;
 };
 
+type VaultBalancesResult = {
+  address: string;
+  sol: number;
+  tokens: Record<string, number>;
+};
+
 type AdminHandlers = {
   forceBuy?: (input: { marketIds?: string[] }) => Promise<unknown>;
   forceSell?: (input: { marketIds?: string[] }) => Promise<unknown>;
@@ -52,6 +58,7 @@ type AdminHandlers = {
   removeIgnoredMarkets?: (input: { marketIds: string[] }) => Promise<unknown>;
   getBotBalances?: (input: { page: number; pageSize: number }) => Promise<BotBalancesPage>;
   updateRuntimeConfig?: (input: RuntimeConfigPatch) => Promise<unknown>;
+  getVaultBalances?: () => Promise<VaultBalancesResult>;
 };
 
 const marketScopedBodySchema = z
@@ -346,6 +353,18 @@ export function buildApp(
         return {
           status: "ok",
           config
+        };
+      });
+
+      adminScope.get("/vault/balances", async (_request, reply) => {
+        if (!adminHandlers.getVaultBalances) {
+          return reply.code(503).send({ error: "vault_balances_unavailable" });
+        }
+
+        const balances = await adminHandlers.getVaultBalances();
+        return {
+          status: "ok",
+          vault: balances
         };
       });
     },

@@ -11,6 +11,11 @@ const envSchema = z.object({
   DEKANT_BACKEND_URL: z.string().url(),
   PRICESERVICE_URL: z.string().url(),
   VAULT_SECRET_KEY: z.string().min(1),
+  SOLANA_RPC_URL: z.string().url(),
+  PROGRAM_ID: z.string().min(32),
+  COLLATERAL_MINT: z.string().min(32),
+  TX_CONFIRM_TIMEOUT_MS: z.coerce.number().int().positive().default(30_000),
+  TX_CONFIRM_COMMITMENT: z.enum(["processed", "confirmed", "finalized"]).default("confirmed"),
   BOT_COUNTS: z.coerce.number().int().positive().default(5),
   MARKET_REFRESH_INTERVAL_MS: z.coerce.number().int().positive().default(3_600_000),
   BUY_INTERVAL_MS: z.coerce.number().int().positive().default(1_200_000),
@@ -45,6 +50,13 @@ export type EnvConfig = {
   integration: {
     dekantBackendUrl: string;
     priceServiceUrl: string;
+  };
+  solana: {
+    rpcUrl: string;
+    programId: string;
+    collateralMint: string;
+    txConfirmTimeoutMs: number;
+    txConfirmCommitment: "processed" | "confirmed" | "finalized";
   };
   vault: {
     secretKey: string;
@@ -98,6 +110,13 @@ export type AppConfig = {
     dekantBackendUrl: string;
     priceServiceUrl: string;
   };
+  solana: {
+    rpcUrl: string;
+    programId: string;
+    collateralMint: string;
+    txConfirmTimeoutMs: number;
+    txConfirmCommitment: "processed" | "confirmed" | "finalized";
+  };
   vault: {
     secretKey: string;
   };
@@ -134,6 +153,13 @@ export function loadEnvConfig(env: NodeJS.ProcessEnv = process.env): EnvConfig {
     integration: {
       dekantBackendUrl: parsed.DEKANT_BACKEND_URL,
       priceServiceUrl: parsed.PRICESERVICE_URL
+    },
+    solana: {
+      rpcUrl: parsed.SOLANA_RPC_URL,
+      programId: parsed.PROGRAM_ID,
+      collateralMint: parsed.COLLATERAL_MINT,
+      txConfirmTimeoutMs: parsed.TX_CONFIRM_TIMEOUT_MS,
+      txConfirmCommitment: parsed.TX_CONFIRM_COMMITMENT
     },
     vault: {
       secretKey: parsed.VAULT_SECRET_KEY
@@ -186,6 +212,7 @@ export function buildAppConfig(env: EnvConfig, runtimeConfig: RuntimeConfigFile)
     adminSecret: env.adminSecret,
     stateDir: env.stateDir,
     integration: env.integration,
+    solana: env.solana,
     vault: env.vault,
     botFleet: env.botFleet,
     intervals: env.intervals,

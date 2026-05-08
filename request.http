@@ -26,6 +26,12 @@ x-security: {{adminSecret}}
 
 ###
 
+### Vault Wallet Balances
+GET {{baseUrl}}/admin/vault/balances
+x-security: {{adminSecret}}
+
+###
+
 ### ----- TRADING -----
 
 ### Force Buy Cycle (all markets)

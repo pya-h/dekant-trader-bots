@@ -1,14 +1,13 @@
 import { pathToFileURL } from "node:url";
+import { PublicKey } from "@solana/web3.js";
 import dotenv from "dotenv";
 import { buildApp } from "./app.js";
 import { bootstrapState } from "./bootstrap.js";
 import { buildAppConfig, loadEnvConfig } from "./config.js";
 import { scheduleInitialFundingIfNeeded, TimerProvider } from "./bots/initial-funding.js";
 import { addBotsAndPersist, BotLifecycleDependencies, reconcileAndPersistBots } from "./bots/lifecycle.js";
-import { HttpBalanceClient } from "./clients/balance-client.js";
 import { FaucetClient, HttpFaucetClient } from "./clients/faucet-client.js";
 import { DekantClient, HttpDekantClient } from "./clients/dekant-client.js";
-import { HttpVaultClient } from "./clients/vault-client.js";
 import { PriceClient } from "./clients/price-client.js";
 import { BalanceClient, FundingEngine, ManualFundRequest, VaultClient } from "./funding/engine.js";
 import { MarketCache } from "./markets/cache.js";
@@ -18,6 +17,11 @@ import { TradeStatsStore } from "./metrics/trade-stats.js";
 import { classifyError } from "./observability/errors.js";
 import { Logger, createLogger } from "./observability/logger.js";
 import { MonitoredJob, RuntimeMonitor } from "./observability/runtime-monitor.js";
+import { createSolanaConnection } from "./solana/connection.js";
+import { keypairFromSecretKey } from "./solana/keypair.js";
+import { SolanaBalanceClient, TokenMintMap } from "./solana/balance.js";
+import { SolanaVaultClient } from "./solana/vault.js";
+import { SolanaTradingClient } from "./solana/trading-client.js";
 import {
   BuyEngine,
   BuyEngineDekantTradingClient,
@@ -51,6 +55,14 @@ function makeDefaultLogger(now: () => Date): StructuredLogger {
   return createLogger({ now });
 }
 
+export type VaultBalanceProvider = {
+  getVaultBalances(tokens: string[]): Promise<{
+    address: string;
+    sol: number;
+    tokens: Record<string, number>;
+  }>;
+};
+
 export type AppInitializationOptions = {
   onInitialFundingRequested?: (context: { createdBotIds: string[]; delayMs: number }) => void | Promise<void>;
   timer?: TimerProvider;
@@ -67,6 +79,7 @@ export type AppInitializationOptions = {
     random?: () => number;
     timer?: LoopIntervalProvider;
   };
+  vaultBalance?: VaultBalanceProvider;
   marketCache?: {
     client: DekantClient;
     refreshIntervalMs?: number;
@@ -400,6 +413,14 @@ export async function createInitializedApp(
       totalPages: Math.max(1, Math.ceil(total / input.pageSize)),
       items
     };
+  };
+
+  const getVaultBalances = async () => {
+    if (!options.vaultBalance) {
+      throw new Error("vault_balance_unavailable");
+    }
+    const tokens = state.runtimeConfig.config.funding.vaultSupportedTokens;
+    return options.vaultBalance.getVaultBalances(tokens);
   };
 
   const runBuyCycle = async (input: { marketIds?: string[]; source?: "manual" | "scheduled" } = {}) => {
@@ -1002,7 +1023,10 @@ export async function createInitializedApp(
       getBotBalances: balanceClient
         ? async (input: { page: number; pageSize: number }) => getBotBalances(input)
         : undefined,
-      updateRuntimeConfig: async (patch: RuntimeConfigPatchInput) => updateRuntimeConfig(patch)
+      updateRuntimeConfig: async (patch: RuntimeConfigPatchInput) => updateRuntimeConfig(patch),
+      getVaultBalances: options.vaultBalance
+        ? async () => getVaultBalances()
+        : undefined
     }
   );
 
@@ -1141,7 +1165,21 @@ async function start(): Promise<void> {
 
   const envConfig = loadEnvConfig(process.env);
 
-  const dekantClient = new HttpDekantClient({
+  const connection = createSolanaConnection({
+    rpcUrl: envConfig.solana.rpcUrl,
+    commitment: envConfig.solana.txConfirmCommitment
+  });
+
+  const vaultKeypair = keypairFromSecretKey(envConfig.vault.secretKey);
+  const programId = new PublicKey(envConfig.solana.programId);
+  const collateralMint = new PublicKey(envConfig.solana.collateralMint);
+
+  const tokenMints: TokenMintMap = {};
+  for (const token of envConfig.runtimeDefaults.vaultSupportedTokens) {
+    tokenMints[token] = envConfig.solana.collateralMint;
+  }
+
+  const dekantHttpClient = new HttpDekantClient({
     baseUrl: envConfig.integration.dekantBackendUrl,
     timeoutMs: envConfig.clientDefaults.dekant.requestTimeoutMs,
     retryCount: envConfig.clientDefaults.dekant.retryCount,
@@ -1163,46 +1201,84 @@ async function start(): Promise<void> {
     retryBackoffMs: envConfig.clientDefaults.faucet.retryBackoffMs
   });
 
-  const vaultClient = new HttpVaultClient({
-    baseUrl: envConfig.integration.dekantBackendUrl,
-    secretKey: envConfig.vault.secretKey,
-    timeoutMs: envConfig.clientDefaults.dekant.requestTimeoutMs,
-    retryCount: envConfig.clientDefaults.dekant.retryCount,
-    retryBackoffMs: envConfig.clientDefaults.dekant.retryBackoffMs
+  const solanaBalanceClient = new SolanaBalanceClient({
+    connection,
+    tokenMints
   });
 
-  const balanceClient = new HttpBalanceClient({
-    baseUrl: envConfig.integration.dekantBackendUrl,
-    timeoutMs: envConfig.clientDefaults.dekant.requestTimeoutMs,
-    retryCount: envConfig.clientDefaults.dekant.retryCount,
-    retryBackoffMs: envConfig.clientDefaults.dekant.retryBackoffMs
+  const solanaVaultClient = new SolanaVaultClient({
+    connection,
+    vaultKeypair,
+    tokenMints,
+    commitment: envConfig.solana.txConfirmCommitment
   });
 
-  logger.info("clients_initialized", {
-    dekantBackendUrl: envConfig.integration.dekantBackendUrl,
-    priceServiceUrl: envConfig.integration.priceServiceUrl,
-    botCount: envConfig.botFleet.initialBotCount,
-    intervals: envConfig.intervals
+  logger.info("solana_initialized", {
+    rpcUrl: envConfig.solana.rpcUrl,
+    programId: envConfig.solana.programId,
+    collateralMint: envConfig.solana.collateralMint,
+    vaultAddress: vaultKeypair.publicKey.toBase58(),
+    commitment: envConfig.solana.txConfirmCommitment
   });
 
   const appCtx = await createInitializedApp(process.env, {
     observability: { logger },
     marketCache: {
-      client: dekantClient
+      client: dekantHttpClient
     },
     buy: {
-      dekant: dekantClient,
+      dekant: {
+        submitBuyOrder: async (input) => {
+          const bot = appCtx.state.botsState.bots.find((b) => b.id === input.botId);
+          if (!bot) throw new Error(`bot_not_found: ${input.botId}`);
+          const tradingClient = new SolanaTradingClient({
+            connection,
+            programId,
+            collateralMint,
+            commitment: envConfig.solana.txConfirmCommitment,
+            resolveBotRecord: (id) => appCtx.state.botsState.bots.find((b) => b.id === id),
+            httpClient: dekantHttpClient
+          });
+          return tradingClient.submitBuyOrder(input);
+        }
+      },
       price: priceClient
     },
     sell: {
-      dekant: dekantClient,
+      dekant: {
+        fetchPositions: (botId) => dekantHttpClient.fetchPositions(botId),
+        submitSellOrder: async (input) => {
+          const tradingClient = new SolanaTradingClient({
+            connection,
+            programId,
+            collateralMint,
+            commitment: envConfig.solana.txConfirmCommitment,
+            resolveBotRecord: (id) => appCtx.state.botsState.bots.find((b) => b.id === id),
+            httpClient: dekantHttpClient
+          });
+          return tradingClient.submitSellOrder(input);
+        }
+      },
       price: priceClient
     },
     funding: {
-      vault: vaultClient,
-      balances: balanceClient,
+      vault: solanaVaultClient,
+      balances: solanaBalanceClient,
       faucet: faucetClient
+    },
+    vaultBalance: {
+      getVaultBalances: async (tokens) =>
+        solanaBalanceClient.getWalletBalances(vaultKeypair.publicKey.toBase58(), tokens)
     }
+  });
+
+  logger.info("clients_initialized", {
+    dekantBackendUrl: envConfig.integration.dekantBackendUrl,
+    priceServiceUrl: envConfig.integration.priceServiceUrl,
+    solanaRpcUrl: envConfig.solana.rpcUrl,
+    vaultAddress: vaultKeypair.publicKey.toBase58(),
+    botCount: envConfig.botFleet.initialBotCount,
+    intervals: envConfig.intervals
   });
 
   const { app, config } = appCtx;

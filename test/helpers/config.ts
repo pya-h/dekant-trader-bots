@@ -11,6 +11,13 @@ export function createTestAppConfig(overrides: Partial<AppConfig> = {}): AppConf
       dekantBackendUrl: "https://backend.example.com",
       priceServiceUrl: "https://prices.example.com"
     },
+    solana: {
+      rpcUrl: "https://api.devnet.solana.com",
+      programId: "DKNTaFgS3UbfUEbVp6NMBo2R4RWDxoBthW8SNf1rAY2w",
+      collateralMint: "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU",
+      txConfirmTimeoutMs: 30_000,
+      txConfirmCommitment: "confirmed"
+    },
     vault: {
       secretKey: "vault-secret"
     },
@@ -72,6 +79,11 @@ export function createBaseEnv(overrides: NodeJS.ProcessEnv = {}): NodeJS.Process
     DEKANT_BACKEND_URL: "https://backend.example.com",
     PRICESERVICE_URL: "https://prices.example.com",
     VAULT_SECRET_KEY: "vault-secret",
+    SOLANA_RPC_URL: "https://api.devnet.solana.com",
+    PROGRAM_ID: "DKNTaFgS3UbfUEbVp6NMBo2R4RWDxoBthW8SNf1rAY2w",
+    COLLATERAL_MINT: "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU",
+    TX_CONFIRM_TIMEOUT_MS: "30000",
+    TX_CONFIRM_COMMITMENT: "confirmed",
     BOT_COUNTS: "2",
     MARKET_REFRESH_INTERVAL_MS: "3600000",
     BUY_INTERVAL_MS: "1200000",

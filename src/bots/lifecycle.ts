@@ -1,6 +1,7 @@
-import { randomBytes, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import { BotRecord, BotsStateFile } from "../state/types.js";
 import { saveBotsState } from "../storage/bots-state-store.js";
+import { generateSolanaKeypair } from "../solana/keypair.js";
 
 export type GenerateKeypairFn = () => {
   publicKey: string;
@@ -31,10 +32,7 @@ function defaultGenerateBotId(): string {
 }
 
 function defaultGenerateKeypair(): { publicKey: string; secretKey: string } {
-  return {
-    publicKey: randomBytes(32).toString("hex"),
-    secretKey: randomBytes(64).toString("hex")
-  };
+  return generateSolanaKeypair();
 }
 
 export function createBotRecord(
