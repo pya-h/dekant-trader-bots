@@ -1,8 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  decideSellMode,
   isPositionFarFromPredictedRange,
-  pickPartialSellAmount,
   resolvePositionReferencePrice
 } from "../../src/trading/sell-engine.js";
 
@@ -34,29 +32,6 @@ describe("isPositionFarFromPredictedRange", () => {
         toleranceRatio: 0.1
       })
     ).toBe(false);
-  });
-});
-
-describe("decideSellMode", () => {
-  it("biases toward partial but still allows full exits", () => {
-    expect(decideSellMode({ random: () => 0.79, partialBiasPercent: 80 })).toBe("partial");
-    expect(decideSellMode({ random: () => 0.8, partialBiasPercent: 80 })).toBe("full");
-
-    expect(decideSellMode({ random: () => 0.5, partialBiasPercent: 100 })).toBe("partial");
-    expect(decideSellMode({ random: () => 0.0, partialBiasPercent: 0 })).toBe("full");
-  });
-});
-
-describe("pickPartialSellAmount", () => {
-  it("returns bounded random partial amounts", () => {
-    const low = pickPartialSellAmount(100, () => 0);
-    const high = pickPartialSellAmount(100, () => 1);
-
-    expect(low).toBeGreaterThan(0);
-    expect(high).toBeLessThan(100);
-    expect(high).toBeGreaterThan(low);
-
-    expect(pickPartialSellAmount(0, () => 0.5)).toBe(0);
   });
 });
 

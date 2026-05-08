@@ -46,27 +46,6 @@ export function isPositionFarFromPredictedRange(options: {
   return options.referencePrice < lowerBound || options.referencePrice > upperBound;
 }
 
-export function decideSellMode(options: {
-  random?: () => number;
-  partialBiasPercent?: number;
-} = {}): "partial" | "full" {
-  const random = options.random ?? Math.random;
-  const partialBiasPercent = clamp(options.partialBiasPercent ?? 75, 0, 100);
-
-  return rollChance(partialBiasPercent, random) ? "partial" : "full";
-}
-
-export function pickPartialSellAmount(positionAmount: number, random: () => number = Math.random): number {
-  if (!Number.isFinite(positionAmount) || positionAmount <= 0) {
-    return 0;
-  }
-
-  const ratio = 0.15 + random() * 0.7;
-  const amount = positionAmount * ratio;
-
-  return roundToFixed(clamp(amount, Math.min(positionAmount, 0.000001), positionAmount));
-}
-
 export type SellCycleSource = "manual" | "scheduled";
 
 export type SellCycleAction = {
@@ -76,7 +55,6 @@ export type SellCycleAction = {
   positionId: string;
   status:
     | "sold_full"
-    | "sold_partial"
     | "skipped_in_range"
     | "skipped_chance"
     | "skipped_missing_price"
@@ -105,7 +83,6 @@ export type SellCycleResult = {
   missingTokenCount: number;
   staleTokenCount: number;
   soldFullCount: number;
-  soldPartialCount: number;
   skippedInRangeCount: number;
   skippedChanceCount: number;
   skippedMissingPriceCount: number;
@@ -148,7 +125,6 @@ export class SellEngine {
   private readonly getMarkets: () => SellMarket[];
   private sellChance: number;
   private readonly intervalMs: number;
-  private readonly partialBiasPercent: number;
   private readonly random: () => number;
   private readonly now: () => Date;
   private readonly timer: SellEngineIntervalProvider;
@@ -166,7 +142,6 @@ export class SellEngine {
     runtime: {
       sellChance: number;
       intervalMs: number;
-      partialBiasPercent?: number;
     };
     clients: {
       price: PriceClientLike;
@@ -181,7 +156,6 @@ export class SellEngine {
   }) {
     this.sellChance = options.runtime.sellChance;
     this.intervalMs = options.runtime.intervalMs;
-    this.partialBiasPercent = options.runtime.partialBiasPercent ?? 75;
     this.priceClient = options.clients.price;
     this.dekantClient = options.clients.dekant;
     this.getBots = options.getBots;
@@ -256,7 +230,6 @@ export class SellEngine {
       missingTokenCount: 0,
       staleTokenCount: 0,
       soldFullCount: 0,
-      soldPartialCount: 0,
       skippedInRangeCount: 0,
       skippedChanceCount: 0,
       skippedMissingPriceCount: 0,
@@ -385,7 +358,6 @@ export class SellEngine {
       const actions: SellCycleAction[] = [];
       let positionsConsidered = 0;
       let soldFullCount = 0;
-      let soldPartialCount = 0;
       let skippedInRangeCount = 0;
       let skippedChanceCount = 0;
       let skippedMissingPriceCount = 0;
@@ -398,7 +370,6 @@ export class SellEngine {
         actions: SellCycleAction[];
         positionsConsidered: number;
         soldFull: number;
-        soldPartial: number;
         skippedInRange: number;
         skippedChance: number;
         skippedMissingPrice: number;
@@ -413,7 +384,6 @@ export class SellEngine {
           actions: [],
           positionsConsidered: 0,
           soldFull: 0,
-          soldPartial: 0,
           skippedInRange: 0,
           skippedChance: 0,
           skippedMissingPrice: 0,
@@ -517,13 +487,7 @@ export class SellEngine {
             continue;
           }
 
-          const mode = decideSellMode({
-            random: this.random,
-            partialBiasPercent: this.partialBiasPercent
-          });
-
-          const requestedSellAmount =
-            mode === "partial" ? pickPartialSellAmount(position.amount, this.random) : roundToFixed(position.amount);
+          const requestedSellAmount = roundToFixed(position.amount);
 
           if (requestedSellAmount <= 0) {
             outcome.skippedInvalidAmount += 1;
@@ -546,29 +510,16 @@ export class SellEngine {
               spread: prediction.spread
             });
 
-            if (mode === "full") {
-              outcome.soldFull += 1;
-              outcome.actions.push({
-                botId: bot.id,
-                marketId: position.marketId,
-                token,
-                positionId: position.id,
-                status: "sold_full",
-                requestedSellAmount,
-                txId: tx.txId
-              });
-            } else {
-              outcome.soldPartial += 1;
-              outcome.actions.push({
-                botId: bot.id,
-                marketId: position.marketId,
-                token,
-                positionId: position.id,
-                status: "sold_partial",
-                requestedSellAmount,
-                txId: tx.txId
-              });
-            }
+            outcome.soldFull += 1;
+            outcome.actions.push({
+              botId: bot.id,
+              marketId: position.marketId,
+              token,
+              positionId: position.id,
+              status: "sold_full",
+              requestedSellAmount,
+              txId: tx.txId
+            });
           } catch (error) {
             outcome.failedSubmit += 1;
             outcome.actions.push({
@@ -592,7 +543,6 @@ export class SellEngine {
         actions.push(...o.actions);
         positionsConsidered += o.positionsConsidered;
         soldFullCount += o.soldFull;
-        soldPartialCount += o.soldPartial;
         skippedInRangeCount += o.skippedInRange;
         skippedChanceCount += o.skippedChance;
         skippedMissingPriceCount += o.skippedMissingPrice;
@@ -620,7 +570,6 @@ export class SellEngine {
         missingTokenCount: priceResolution.missingTokens.length,
         staleTokenCount: priceResolution.staleTokens.length,
         soldFullCount,
-        soldPartialCount,
         skippedInRangeCount,
         skippedChanceCount,
         skippedMissingPriceCount,

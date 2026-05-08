@@ -16,7 +16,7 @@ import { toBaseUnitsBN } from "./units.js";
 const TOKEN_PROGRAM_ID = new PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
 const ASSOCIATED_TOKEN_PROGRAM_ID = new PublicKey("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL");
 
-const SCALE = 1_000_000_000;
+const SCALE = 1_000_000_000n;
 
 function priorityFeeMicroLamports(): number {
   const raw = process.env.PRIORITY_FEE_MICROLAMPORTS;
@@ -49,21 +49,36 @@ function getAta(mint: PublicKey, owner: PublicKey): PublicKey {
   return address;
 }
 
-function toScaled(value: number, label: string, rangeMin: BN, rangeMax: BN): BN {
+function scaleBigInt(value: number, label: string): bigint {
   if (!Number.isFinite(value)) {
     throw new OutOfRangeError(`${label}_not_finite`);
   }
-  const scaled = Math.round(value * SCALE);
-  if (!Number.isSafeInteger(scaled)) {
-    throw new OutOfRangeError(`${label}_outside_safe_integer:${value}`);
-  }
-  const bn = new BN(scaled);
+  // BigInt arithmetic so we cover the full i64 range (~±9.2e9 in human units)
+  // instead of being capped by Number.MAX_SAFE_INTEGER (~±9e6 scaled).
+  const sign = value < 0 ? -1n : 1n;
+  const abs = Math.abs(value);
+  const whole = BigInt(Math.trunc(abs));
+  const frac = BigInt(Math.round((abs - Math.trunc(abs)) * Number(SCALE)));
+  return sign * (whole * SCALE + frac);
+}
+
+function scaleMu(value: number, rangeMin: BN, rangeMax: BN): BN {
+  const scaled = scaleBigInt(value, "mu");
+  const bn = new BN(scaled.toString());
   if (bn.lt(rangeMin) || bn.gt(rangeMax)) {
     throw new OutOfRangeError(
-      `${label}_outside_market_range:${value}:[${rangeMin.toString()},${rangeMax.toString()}]`
+      `mu_outside_market_range:${value}:[${rangeMin.toString()},${rangeMax.toString()}]`
     );
   }
   return bn;
+}
+
+function scaleSigma(value: number): BN {
+  const scaled = scaleBigInt(value, "sigma");
+  if (scaled <= 0n) {
+    throw new OutOfRangeError(`sigma_must_be_positive:${value}`);
+  }
+  return new BN(scaled.toString());
 }
 
 export type DecimalsResolver = (mint: string) => Promise<number>;
@@ -146,8 +161,8 @@ export async function executeBuyDistribution(
   );
   const builder = program.methods
     .buyDistribution({
-      mu: toScaled(mu, "mu", rangeMin, rangeMax),
-      sigma: toScaled(sigma, "sigma", rangeMin, rangeMax),
+      mu: scaleMu(mu, rangeMin, rangeMax),
+      sigma: scaleSigma(sigma),
       collateralAmount: toBaseUnitsBN(amount, decimals)
     })
     .accountsPartial({ ...accounts, systemProgram: SystemProgram.programId })
@@ -180,8 +195,8 @@ export async function executeSellDistribution(
   );
   const builder = program.methods
     .sellDistribution({
-      mu: toScaled(mu, "mu", rangeMin, rangeMax),
-      sigma: toScaled(sigma, "sigma", rangeMin, rangeMax),
+      mu: scaleMu(mu, rangeMin, rangeMax),
+      sigma: scaleSigma(sigma),
       tokenAmount: toBaseUnitsBN(tokenAmount, decimals)
     })
     .accountsPartial(accounts)

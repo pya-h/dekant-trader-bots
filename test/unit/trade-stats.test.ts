@@ -86,8 +86,7 @@ describe("TradeStatsStore", () => {
       requestedTokenCount: 1,
       missingTokenCount: 0,
       staleTokenCount: 0,
-      soldFullCount: 1,
-      soldPartialCount: 1,
+      soldFullCount: 2,
       skippedInRangeCount: 0,
       skippedChanceCount: 0,
       skippedMissingPriceCount: 0,
@@ -101,7 +100,7 @@ describe("TradeStatsStore", () => {
           marketId: "m1",
           token: "BTC",
           positionId: "p1",
-          status: "sold_partial",
+          status: "sold_full",
           requestedSellAmount: 2,
           txId: "tx3"
         },

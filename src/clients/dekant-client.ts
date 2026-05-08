@@ -15,6 +15,7 @@ const marketSchema = z
       }
     }, "collateralMint_not_valid_pubkey"),
     category: z.string().optional(),
+    marketType: z.number().int(),
     state: z.number().int().optional(),
     // Stringified u64 from the backend (collateral mint base units).
     lpSharesTotal: z.string().optional(),
@@ -96,11 +97,17 @@ export class HttpDekantClient implements Pick<DekantClient, "fetchMarkets"> {
     const valid: DekantMarket[] = [];
     for (const entry of raw) {
       const result = marketSchema.safeParse(entry);
-      if (result.success) {
-        valid.push(result.data);
-      } else {
+      if (!result.success) {
         this.onMarketDropped?.({ reason: result.error.message, raw: entry });
+        continue;
       }
+      // Bot only trades on Continuous markets (marketType === 2). Binary/Multi
+      // markets reject buy_distribution/sell_distribution on-chain with WrongMarketType.
+      if (result.data.marketType !== 2) {
+        this.onMarketDropped?.({ reason: `non_continuous_market_type:${result.data.marketType}`, raw: entry });
+        continue;
+      }
+      valid.push(result.data);
     }
     return valid;
   }

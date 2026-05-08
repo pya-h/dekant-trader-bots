@@ -83,9 +83,9 @@ describe("sell engine integration", () => {
 
     const markets: DekantMarket[] = [
       { id: "m1", subject: "BTC",
-      collateralMint: "Mint11111111111111111111111111111111111111", category: "crypto", state: 0 },
+      collateralMint: "Mint11111111111111111111111111111111111111", marketType: 2, category: "crypto", state: 0 },
       { id: "m2", subject: "ETH",
-      collateralMint: "Mint11111111111111111111111111111111111111", category: "crypto", state: 0 }
+      collateralMint: "Mint11111111111111111111111111111111111111", marketType: 2, category: "crypto", state: 0 }
     ];
 
     const appBoot = await createInitializedApp(env, {
@@ -136,7 +136,6 @@ describe("sell engine integration", () => {
     expect(response.body.cycle.botsWithPositions).toBe(2);
     expect(response.body.cycle.botsWithoutPositions).toBe(1);
     expect(response.body.cycle.soldFullCount).toBe(2);
-    expect(response.body.cycle.soldPartialCount).toBe(0);
     expect(harness.submitSellCalls).toHaveLength(2);
     expect(harness.getPriceResolveCalls()).toBe(1);
 
@@ -152,9 +151,9 @@ describe("sell engine integration", () => {
 
     const markets: DekantMarket[] = [
       { id: "m1", subject: "BTC",
-      collateralMint: "Mint11111111111111111111111111111111111111", category: "crypto", state: 0 },
+      collateralMint: "Mint11111111111111111111111111111111111111", marketType: 2, category: "crypto", state: 0 },
       { id: "m2", subject: "ETH",
-      collateralMint: "Mint11111111111111111111111111111111111111", category: "crypto", state: 0 }
+      collateralMint: "Mint11111111111111111111111111111111111111", marketType: 2, category: "crypto", state: 0 }
     ];
 
     const appBoot = await createInitializedApp(env, {
@@ -217,7 +216,7 @@ describe("sell engine integration", () => {
     });
 
     const markets: DekantMarket[] = [{ id: "m1", subject: "BTC",
-      collateralMint: "Mint11111111111111111111111111111111111111", category: "crypto", state: 0 }];
+      collateralMint: "Mint11111111111111111111111111111111111111", marketType: 2, category: "crypto", state: 0 }];
 
     const appBoot = await createInitializedApp(env, {
       store,

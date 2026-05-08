@@ -156,7 +156,7 @@ describe("runtime loops", () => {
     });
 
     const markets: DekantMarket[] = [{ id: "m1", subject: "BTC",
-      collateralMint: "Mint11111111111111111111111111111111111111", category: "crypto", state: 0 }];
+      collateralMint: "Mint11111111111111111111111111111111111111", marketType: 2, category: "crypto", state: 0 }];
 
     const dekantClient: DekantClient = {
       fetchMarkets: async () => markets,

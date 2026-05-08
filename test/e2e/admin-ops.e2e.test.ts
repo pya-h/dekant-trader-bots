@@ -154,9 +154,9 @@ describe("admin ops endpoints", () => {
 
     const markets: DekantMarket[] = [
       { id: "m1", subject: "BTC",
-      collateralMint: "Mint11111111111111111111111111111111111111", category: "crypto", state: 0 },
+      collateralMint: "Mint11111111111111111111111111111111111111", marketType: 2, category: "crypto", state: 0 },
       { id: "m2", subject: "ETH",
-      collateralMint: "Mint11111111111111111111111111111111111111", category: "crypto", state: 0 }
+      collateralMint: "Mint11111111111111111111111111111111111111", marketType: 2, category: "crypto", state: 0 }
     ];
 
     const positionsByBotId: Record<string, DekantPosition[]> = {
@@ -273,7 +273,7 @@ describe("admin ops endpoints", () => {
     const balancesByAddress = new Map<string, BalanceSnapshot>();
     const harness = createOpsHarness({
       markets: [{ id: "m1", subject: "BTC",
-      collateralMint: "Mint11111111111111111111111111111111111111", category: "crypto", state: 0 }],
+      collateralMint: "Mint11111111111111111111111111111111111111", marketType: 2, category: "crypto", state: 0 }],
       positionsByBotId: {},
       balancesByAddress
     });
@@ -321,7 +321,7 @@ describe("admin ops endpoints", () => {
     await bootstrap.app.close();
 
     const markets: DekantMarket[] = [{ id: "m1", subject: "BTC",
-      collateralMint: "Mint11111111111111111111111111111111111111", category: "crypto", state: 0 }];
+      collateralMint: "Mint11111111111111111111111111111111111111", marketType: 2, category: "crypto", state: 0 }];
     const positionsByBotId: Record<string, DekantPosition[]> = {
       [bots[0].id]: [{ id: "p1", marketId: "m1", token: "BTC", amount: 10, center: 130 }],
       [bots[1].id]: [{ id: "p2", marketId: "m1", token: "BTC", amount: 9, center: 130 }]

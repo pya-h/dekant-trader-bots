@@ -41,9 +41,9 @@ describe("market cache integration", () => {
   it("scheduler refresh updates active market set over time", async () => {
     const sequence: DekantMarket[][] = [
       [{ id: "m1", subject: "BTC",
-      collateralMint: "Mint11111111111111111111111111111111111111", category: "crypto", state: 0 }],
+      collateralMint: "Mint11111111111111111111111111111111111111", marketType: 2, category: "crypto", state: 0 }],
       [{ id: "m2", subject: "ETH",
-      collateralMint: "Mint11111111111111111111111111111111111111", category: "crypto", state: 0 }]
+      collateralMint: "Mint11111111111111111111111111111111111111", marketType: 2, category: "crypto", state: 0 }]
     ];
     let call = 0;
 
@@ -71,9 +71,9 @@ describe("market cache integration", () => {
   it("ignored market updates affect subsequent refresh results", async () => {
     const client = makeDekantClient(async () => [
       { id: "m1", subject: "BTC",
-      collateralMint: "Mint11111111111111111111111111111111111111", category: "crypto", state: 0 },
+      collateralMint: "Mint11111111111111111111111111111111111111", marketType: 2, category: "crypto", state: 0 },
       { id: "m2", subject: "SOL",
-      collateralMint: "Mint11111111111111111111111111111111111111", category: "crypto", state: 0 }
+      collateralMint: "Mint11111111111111111111111111111111111111", marketType: 2, category: "crypto", state: 0 }
     ]);
 
     const cache = new MarketCache({
