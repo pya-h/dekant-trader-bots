@@ -9,7 +9,8 @@ export function createTestAppConfig(overrides: Partial<AppConfig> = {}): AppConf
     integration: {
       dekantBackendUrl: "https://backend.example.com",
       priceServiceUrl: "https://prices.example.com",
-      solanaRpcUrl: "https://rpc.example.com"
+      solanaRpcUrl: "https://rpc.example.com",
+      dekantProgramId: "11111111111111111111111111111111"
     },
     vault: {
       secretKey: "vault-secret"
@@ -71,6 +72,7 @@ export function createBaseEnv(overrides: NodeJS.ProcessEnv = {}): NodeJS.Process
     DEKANT_BACKEND_URL: "https://backend.example.com",
     PRICESERVICE_URL: "https://prices.example.com",
     SOLANA_RPC_URL: "https://rpc.example.com",
+    DEKANT_PROGRAM_ID: "11111111111111111111111111111111",
     VAULT_SECRET_KEY: "vault-secret",
     BOT_COUNTS: "2",
     MARKET_REFRESH_INTERVAL_MS: "3600000",

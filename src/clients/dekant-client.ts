@@ -6,7 +6,9 @@ const marketSchema = z.object({
   subject: z.string(),
   collateralMint: z.string().min(1),
   category: z.string().optional(),
-  status: z.string().optional(),
+  state: z.number().int().optional(),
+  // Stringified u64 from the backend (collateral mint base units).
+  lpSharesTotal: z.string().optional(),
   liquidity: z.number().optional(),
   deadline: z.string().optional()
 });
@@ -21,19 +23,7 @@ const positionSchema = z.object({
   marketId: z.string(),
   token: z.string(),
   amount: z.number(),
-  side: z.string().optional(),
-  center: z.number().optional(),
-  entryPrice: z.number().optional(),
-  price: z.number().optional()
-});
-
-const txResultSchema = z.object({
-  txId: z.string()
-});
-
-const prepareBotResultSchema = z.object({
-  userId: z.string(),
-  publicKey: z.string()
+  center: z.number().optional()
 });
 
 export type DekantMarket = z.infer<typeof marketSchema>;
@@ -47,17 +37,11 @@ export type SubmitTradeRequest = {
   spread: number;
 };
 
-export type PrepareBotRequest = {
-  botId: string;
-  publicKey: string;
-};
-
 export interface DekantClient {
   fetchMarkets(): Promise<DekantMarket[]>;
   fetchPositions(botId: string): Promise<DekantPosition[]>;
   submitBuyOrder(input: SubmitTradeRequest): Promise<{ txId: string }>;
   submitSellOrder(input: SubmitTradeRequest): Promise<{ txId: string }>;
-  prepareBotUser(input: PrepareBotRequest): Promise<{ userId: string; publicKey: string }>;
 }
 
 export type DekantClientOptions = {
@@ -68,7 +52,7 @@ export type DekantClientOptions = {
   fetchImpl?: typeof fetch;
 };
 
-export class HttpDekantClient implements DekantClient {
+export class HttpDekantClient implements Pick<DekantClient, "fetchMarkets"> {
   private readonly baseUrl: string;
   private readonly timeoutMs: number;
   private readonly retryCount: number;
@@ -94,60 +78,5 @@ export class HttpDekantClient implements DekantClient {
 
     const parsed = marketsResponseSchema.parse(payload);
     return Array.isArray(parsed) ? parsed : parsed.data;
-  }
-
-  async fetchPositions(botId: string): Promise<DekantPosition[]> {
-    const params = new URLSearchParams({ botId });
-    const payload = await requestJsonWithRetry<unknown>({
-      url: `${this.baseUrl}/positions?${params.toString()}`,
-      timeoutMs: this.timeoutMs,
-      retryCount: this.retryCount,
-      retryBackoffMs: this.retryBackoffMs,
-      fetchImpl: this.fetchImpl
-    });
-
-    return z.array(positionSchema).parse(payload);
-  }
-
-  async submitBuyOrder(input: SubmitTradeRequest): Promise<{ txId: string }> {
-    const payload = await requestJsonWithRetry<unknown>({
-      url: `${this.baseUrl}/trades/buy`,
-      method: "POST",
-      body: input,
-      timeoutMs: this.timeoutMs,
-      retryCount: this.retryCount,
-      retryBackoffMs: this.retryBackoffMs,
-      fetchImpl: this.fetchImpl
-    });
-
-    return txResultSchema.parse(payload);
-  }
-
-  async submitSellOrder(input: SubmitTradeRequest): Promise<{ txId: string }> {
-    const payload = await requestJsonWithRetry<unknown>({
-      url: `${this.baseUrl}/trades/sell`,
-      method: "POST",
-      body: input,
-      timeoutMs: this.timeoutMs,
-      retryCount: this.retryCount,
-      retryBackoffMs: this.retryBackoffMs,
-      fetchImpl: this.fetchImpl
-    });
-
-    return txResultSchema.parse(payload);
-  }
-
-  async prepareBotUser(input: PrepareBotRequest): Promise<{ userId: string; publicKey: string }> {
-    const payload = await requestJsonWithRetry<unknown>({
-      url: `${this.baseUrl}/bots/prepare`,
-      method: "POST",
-      body: input,
-      timeoutMs: this.timeoutMs,
-      retryCount: this.retryCount,
-      retryBackoffMs: this.retryBackoffMs,
-      fetchImpl: this.fetchImpl
-    });
-
-    return prepareBotResultSchema.parse(payload);
   }
 }

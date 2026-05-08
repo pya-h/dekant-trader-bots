@@ -21,14 +21,6 @@ export function resolvePositionReferencePrice(position: DekantPosition): number 
     return position.center;
   }
 
-  if (typeof position.entryPrice === "number" && Number.isFinite(position.entryPrice)) {
-    return position.entryPrice;
-  }
-
-  if (typeof position.price === "number" && Number.isFinite(position.price)) {
-    return position.price;
-  }
-
   return null;
 }
 

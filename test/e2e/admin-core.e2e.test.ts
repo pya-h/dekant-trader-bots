@@ -12,8 +12,7 @@ function createDekantClient(markets: DekantMarket[]): DekantClient {
     fetchMarkets: async () => markets,
     fetchPositions: async () => [],
     submitBuyOrder: async () => ({ txId: "buy-1" }),
-    submitSellOrder: async () => ({ txId: "sell-1" }),
-    prepareBotUser: async () => ({ userId: "u1", publicKey: "p1" })
+    submitSellOrder: async () => ({ txId: "sell-1" })
   };
 }
 
@@ -44,9 +43,9 @@ describe("admin core endpoints", () => {
 
     const markets: DekantMarket[] = [
       { id: "m1", subject: "BTC",
-      collateralMint: "Mint11111111111111111111111111111111111111", category: "crypto", status: "open" },
+      collateralMint: "Mint11111111111111111111111111111111111111", category: "crypto", state: 0 },
       { id: "m2", subject: "ETH",
-      collateralMint: "Mint11111111111111111111111111111111111111", category: "crypto", status: "open" }
+      collateralMint: "Mint11111111111111111111111111111111111111", category: "crypto", state: 0 }
     ];
 
     const client = createDekantClient(markets);

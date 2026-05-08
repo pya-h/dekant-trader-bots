@@ -61,43 +61,20 @@ describe("pickPartialSellAmount", () => {
 });
 
 describe("resolvePositionReferencePrice", () => {
-  it("uses center, then entryPrice, then price as fallback", () => {
+  it("returns center when set, null otherwise", () => {
     expect(
       resolvePositionReferencePrice({
         id: "p1",
         marketId: "m1",
         token: "BTC",
         amount: 10,
-        center: 101,
-        entryPrice: 95,
-        price: 99
+        center: 101
       })
     ).toBe(101);
 
     expect(
       resolvePositionReferencePrice({
         id: "p2",
-        marketId: "m1",
-        token: "BTC",
-        amount: 10,
-        entryPrice: 95,
-        price: 99
-      })
-    ).toBe(95);
-
-    expect(
-      resolvePositionReferencePrice({
-        id: "p3",
-        marketId: "m1",
-        token: "BTC",
-        amount: 10,
-        price: 99
-      })
-    ).toBe(99);
-
-    expect(
-      resolvePositionReferencePrice({
-        id: "p4",
         marketId: "m1",
         token: "BTC",
         amount: 10

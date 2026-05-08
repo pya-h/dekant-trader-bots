@@ -1,6 +1,8 @@
 import { DekantClient, DekantMarket } from "../clients/dekant-client.js";
+import type { MintRegistry } from "../clients/mint-registry.js";
 
-const CLOSED_STATUSES = new Set(["resolved", "closed", "cancelled", "settled", "finalized"]);
+// Mirror of on-chain MarketState enum from the program IDL.
+const MARKET_STATE_ACTIVE = 0;
 
 export type IntervalProvider = {
   setInterval(handler: () => void, intervalMs: number): unknown;
@@ -26,8 +28,7 @@ export function filterEligibleMarkets(options: {
       return false;
     }
 
-    const status = market.status?.toLowerCase();
-    if (status && CLOSED_STATUSES.has(status)) {
+    if (market.state !== undefined && market.state !== MARKET_STATE_ACTIVE) {
       return false;
     }
 
@@ -47,6 +48,7 @@ export class MarketCache {
   private readonly client: DekantClient;
   private readonly refreshIntervalMs: number;
   private readonly timer: IntervalProvider;
+  private readonly mintRegistry: MintRegistry | null;
   private ignoredMarketIds: Set<string>;
   private intervalHandle: unknown = null;
 
@@ -59,10 +61,12 @@ export class MarketCache {
     refreshIntervalMs: number;
     ignoredMarketIds?: string[];
     timer?: IntervalProvider;
+    mintRegistry?: MintRegistry;
   }) {
     this.client = options.client;
     this.refreshIntervalMs = options.refreshIntervalMs;
     this.timer = options.timer ?? defaultIntervalProvider;
+    this.mintRegistry = options.mintRegistry ?? null;
     this.ignoredMarketIds = new Set((options.ignoredMarketIds ?? []).map((id) => id.trim()));
   }
 
@@ -99,8 +103,9 @@ export class MarketCache {
         markets,
         ignoredMarketIds: this.ignoredMarketIds
       });
+      const enriched = await this.enrichLiquidity(filtered);
 
-      this.activeMarkets = filtered;
+      this.activeMarkets = enriched;
       this.lastRefreshAt = new Date().toISOString();
       this.lastError = null;
 
@@ -140,5 +145,26 @@ export class MarketCache {
 
     this.timer.clearInterval(this.intervalHandle);
     this.intervalHandle = null;
+  }
+
+  /** Derive `liquidity` (human units) from `lpSharesTotal` using the mint's decimals. */
+  private async enrichLiquidity(markets: DekantMarket[]): Promise<DekantMarket[]> {
+    if (!this.mintRegistry) return markets;
+
+    return Promise.all(
+      markets.map(async (market) => {
+        if (market.liquidity !== undefined || market.lpSharesTotal === undefined) {
+          return market;
+        }
+        const raw = Number(market.lpSharesTotal);
+        if (!Number.isFinite(raw) || raw < 0) return market;
+        try {
+          const decimals = await this.mintRegistry!.getDecimals(market.collateralMint);
+          return { ...market, liquidity: raw / Math.pow(10, decimals) };
+        } catch {
+          return market;
+        }
+      })
+    );
   }
 }

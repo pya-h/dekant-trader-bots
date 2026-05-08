@@ -7,8 +7,7 @@ function makeDekantClient(fetchMarketsImpl: () => Promise<DekantMarket[]>): Deka
     fetchMarkets: fetchMarketsImpl,
     fetchPositions: vi.fn(async () => []),
     submitBuyOrder: vi.fn(async () => ({ txId: "buy" })),
-    submitSellOrder: vi.fn(async () => ({ txId: "sell" })),
-    prepareBotUser: vi.fn(async () => ({ userId: "u", publicKey: "p" }))
+    submitSellOrder: vi.fn(async () => ({ txId: "sell" }))
   };
 }
 
@@ -42,9 +41,9 @@ describe("market cache integration", () => {
   it("scheduler refresh updates active market set over time", async () => {
     const sequence: DekantMarket[][] = [
       [{ id: "m1", subject: "BTC",
-      collateralMint: "Mint11111111111111111111111111111111111111", category: "crypto", status: "open" }],
+      collateralMint: "Mint11111111111111111111111111111111111111", category: "crypto", state: 0 }],
       [{ id: "m2", subject: "ETH",
-      collateralMint: "Mint11111111111111111111111111111111111111", category: "crypto", status: "open" }]
+      collateralMint: "Mint11111111111111111111111111111111111111", category: "crypto", state: 0 }]
     ];
     let call = 0;
 
@@ -72,9 +71,9 @@ describe("market cache integration", () => {
   it("ignored market updates affect subsequent refresh results", async () => {
     const client = makeDekantClient(async () => [
       { id: "m1", subject: "BTC",
-      collateralMint: "Mint11111111111111111111111111111111111111", category: "crypto", status: "open" },
+      collateralMint: "Mint11111111111111111111111111111111111111", category: "crypto", state: 0 },
       { id: "m2", subject: "SOL",
-      collateralMint: "Mint11111111111111111111111111111111111111", category: "crypto", status: "open" }
+      collateralMint: "Mint11111111111111111111111111111111111111", category: "crypto", state: 0 }
     ]);
 
     const cache = new MarketCache({

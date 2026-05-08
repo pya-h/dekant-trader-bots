@@ -18,6 +18,7 @@ const envSchema = z.object({
   DEKANT_BACKEND_URL: z.string().url(),
   PRICESERVICE_URL: z.string().url(),
   SOLANA_RPC_URL: z.string().url(),
+  DEKANT_PROGRAM_ID: z.string().min(32),
   VAULT_SECRET_KEY: z.string().min(1),
   BOT_COUNTS: z.coerce.number().int().positive().default(5),
   MARKET_REFRESH_INTERVAL_MS: z.coerce.number().int().positive().default(3_600_000),
@@ -55,6 +56,7 @@ export type EnvConfig = {
     dekantBackendUrl: string;
     priceServiceUrl: string;
     solanaRpcUrl: string;
+    dekantProgramId: string;
   };
   vault: {
     secretKey: string;
@@ -107,6 +109,7 @@ export type AppConfig = {
     dekantBackendUrl: string;
     priceServiceUrl: string;
     solanaRpcUrl: string;
+    dekantProgramId: string;
   };
   vault: {
     secretKey: string;
@@ -146,7 +149,8 @@ export function loadEnvConfig(env: NodeJS.ProcessEnv = process.env): EnvConfig {
     integration: {
       dekantBackendUrl: parsed.DEKANT_BACKEND_URL,
       priceServiceUrl: parsed.PRICESERVICE_URL,
-      solanaRpcUrl: parsed.SOLANA_RPC_URL
+      solanaRpcUrl: parsed.SOLANA_RPC_URL,
+      dekantProgramId: parsed.DEKANT_PROGRAM_ID
     },
     vault: {
       secretKey: parsed.VAULT_SECRET_KEY

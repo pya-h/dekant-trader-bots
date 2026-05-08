@@ -1,5 +1,5 @@
 import { PublicKey } from "@solana/web3.js";
-import { buildAppConfig, EnvConfig, loadEnvConfig } from "./config.js";
+import { EnvConfig, loadEnvConfig } from "./config.js";
 import type { StructuredLogger } from "./observability/logger.js";
 import { BotRecord, BotsStateFile, RuntimeConfigFile } from "./state/types.js";
 import type { StateStore } from "./storage/state-store.js";
@@ -138,15 +138,5 @@ export async function bootstrapState(
       botsState,
       store
     }
-  };
-}
-
-export async function bootstrapConfig(env: NodeJS.ProcessEnv = process.env, store?: StateStore) {
-  const { envConfig, state } = await bootstrapState(env, store);
-  const appConfig = buildAppConfig(envConfig, state.runtimeConfig);
-
-  return {
-    config: appConfig,
-    state
   };
 }

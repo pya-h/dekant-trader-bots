@@ -11,16 +11,18 @@ import {
   createTransferCheckedInstruction,
   getAccount,
   getAssociatedTokenAddress,
-  getMint,
   TokenAccountNotFoundError,
   TokenInvalidAccountOwnerError
 } from "@solana/spl-token";
 import bs58 from "bs58";
 import type { VaultClient } from "../funding/engine.js";
+import type { MintRegistry } from "./mint-registry.js";
+import { toBaseUnitsBigInt } from "../solana/units.js";
 
 export type SolanaVaultClientOptions = {
   connection: Connection;
   vaultKeypair: Keypair;
+  mintRegistry: MintRegistry;
 };
 
 export function loadKeypairFromSecret(raw: string): Keypair {
@@ -42,22 +44,12 @@ export function loadKeypairFromSecret(raw: string): Keypair {
 export class SolanaVaultClient implements VaultClient {
   private readonly connection: Connection;
   private readonly vaultKeypair: Keypair;
-  private readonly mintInfoCache = new Map<string, { decimals: number }>();
+  private readonly mintRegistry: MintRegistry;
 
   constructor(options: SolanaVaultClientOptions) {
     this.connection = options.connection;
     this.vaultKeypair = options.vaultKeypair;
-  }
-
-  private async getMintDecimals(mint: PublicKey): Promise<number> {
-    const key = mint.toBase58();
-    const cached = this.mintInfoCache.get(key);
-    if (cached) {
-      return cached.decimals;
-    }
-    const info = await getMint(this.connection, mint);
-    this.mintInfoCache.set(key, { decimals: info.decimals });
-    return info.decimals;
+    this.mintRegistry = options.mintRegistry;
   }
 
   async transferSol(input: { toAddress: string; amount: number }): Promise<{ txId: string }> {
@@ -84,8 +76,8 @@ export class SolanaVaultClient implements VaultClient {
 
   async transferToken(input: { token: string; toAddress: string; amount: number }): Promise<{ txId: string }> {
     const mint = new PublicKey(input.token);
-    const decimals = await this.getMintDecimals(mint);
-    const baseUnits = BigInt(Math.round(input.amount * 10 ** decimals));
+    const decimals = await this.mintRegistry.getDecimals(input.token);
+    const baseUnits = toBaseUnitsBigInt(input.amount.toString(), decimals);
     if (baseUnits <= 0n) {
       throw new Error("transfer_token_amount_must_be_positive");
     }
