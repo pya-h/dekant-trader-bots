@@ -2,6 +2,13 @@ import { Connection, PublicKey } from "@solana/web3.js";
 import { TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import type { BalanceClient } from "../funding/engine.js";
 
+export class TokenAmountShapeError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "TokenAmountShapeError";
+  }
+}
+
 export type SolanaBalanceClientOptions = {
   connection: Connection;
 };
@@ -40,14 +47,12 @@ export class SolanaBalanceClient implements BalanceClient {
       const tokenAmount = info?.tokenAmount;
       const amountStr: string | undefined = tokenAmount?.amount;
       const decimals: number | undefined = tokenAmount?.decimals;
-      let uiAmount = 0;
-      if (typeof amountStr === "string" && typeof decimals === "number") {
-        uiAmount = Number(amountStr) / Math.pow(10, decimals);
-      } else if (typeof tokenAmount?.uiAmountString === "string") {
-        uiAmount = Number(tokenAmount.uiAmountString);
-      } else {
-        uiAmount = tokenAmount?.uiAmount ?? 0;
+      if (typeof amountStr !== "string" || typeof decimals !== "number") {
+        throw new TokenAmountShapeError(
+          `unexpected_token_amount_shape:${mint}:${typeof amountStr}:${typeof decimals}`
+        );
       }
+      const uiAmount = Number(amountStr) / Math.pow(10, decimals);
       balances[mint] = (balances[mint] ?? 0) + uiAmount;
     }
 
