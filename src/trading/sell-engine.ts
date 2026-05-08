@@ -8,6 +8,15 @@ function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
 }
 
+function shuffled<T>(items: readonly T[], random: () => number): T[] {
+  const copy = items.slice();
+  for (let i = copy.length - 1; i > 0; i--) {
+    const j = Math.floor(random() * (i + 1));
+    [copy[i], copy[j]] = [copy[j], copy[i]];
+  }
+  return copy;
+}
+
 function roundToFixed(value: number): number {
   return Number(value.toFixed(6));
 }
@@ -315,15 +324,23 @@ export class SellEngine {
       let botsWithPositions = 0;
       let botsWithoutPositions = 0;
 
-      for (const bot of bots) {
-        const positions = await this.dekantClient.fetchPositions(bot.id);
+      const fetchSettled = await Promise.allSettled(
+        bots.map(async (bot) => ({
+          bot,
+          positions: await this.dekantClient.fetchPositions(bot.id)
+        }))
+      );
+      for (const result of fetchSettled) {
+        if (result.status !== "fulfilled") {
+          botsWithoutPositions += 1;
+          continue;
+        }
+        const { bot, positions } = result.value;
         const selectedPositions = positions.filter((position) => selectedMarketsById.has(position.marketId));
-
         if (selectedPositions.length === 0) {
           botsWithoutPositions += 1;
           continue;
         }
-
         botsWithPositions += 1;
         positionsByBot.set(bot.id, selectedPositions);
       }
@@ -377,19 +394,46 @@ export class SellEngine {
       let skippedInvalidAmountCount = 0;
       let failedSubmitCount = 0;
 
-      for (const bot of bots) {
-        const positions = positionsByBot.get(bot.id) ?? [];
+      type SellOutcome = {
+        actions: SellCycleAction[];
+        positionsConsidered: number;
+        soldFull: number;
+        soldPartial: number;
+        skippedInRange: number;
+        skippedChance: number;
+        skippedMissingPrice: number;
+        skippedStalePrice: number;
+        skippedNoReference: number;
+        skippedInvalidAmount: number;
+        failedSubmit: number;
+      };
+
+      const runBot = async (bot: BotRecord): Promise<SellOutcome> => {
+        const outcome: SellOutcome = {
+          actions: [],
+          positionsConsidered: 0,
+          soldFull: 0,
+          soldPartial: 0,
+          skippedInRange: 0,
+          skippedChance: 0,
+          skippedMissingPrice: 0,
+          skippedStalePrice: 0,
+          skippedNoReference: 0,
+          skippedInvalidAmount: 0,
+          failedSubmit: 0
+        };
+        const positions = shuffled(positionsByBot.get(bot.id) ?? [], this.random);
 
         for (const position of positions) {
-          positionsConsidered += 1;
+          outcome.positionsConsidered += 1;
 
           const market = selectedMarketsById.get(position.marketId);
           const token = market?.collateralMint ?? position.token ?? "";
           const marketPrice = priceResolution.byMarketId.get(position.marketId);
 
           if (!marketPrice || marketPrice.status === "missing") {
-            skippedMissingPriceCount += 1;
-            actions.push({
+            outcome.skippedMissingPrice += 1;
+            outcome.actions.push({
               botId: bot.id,
               marketId: position.marketId,
               token,
@@ -400,8 +444,8 @@ export class SellEngine {
           }
 
           if (marketPrice.status === "stale") {
-            skippedStalePriceCount += 1;
-            actions.push({
+            outcome.skippedStalePrice += 1;
+            outcome.actions.push({
               botId: bot.id,
               marketId: position.marketId,
               token,
@@ -412,8 +456,8 @@ export class SellEngine {
           }
 
           if (!market || !marketPrice.quote) {
-            skippedMissingPriceCount += 1;
-            actions.push({
+            outcome.skippedMissingPrice += 1;
+            outcome.actions.push({
               botId: bot.id,
               marketId: position.marketId,
               token,
@@ -432,8 +476,8 @@ export class SellEngine {
 
           const positionReference = resolvePositionReferencePrice(position);
           if (positionReference === null) {
-            skippedNoReferenceCount += 1;
-            actions.push({
+            outcome.skippedNoReference += 1;
+            outcome.actions.push({
               botId: bot.id,
               marketId: position.marketId,
               token,
@@ -450,8 +494,8 @@ export class SellEngine {
           });
 
           if (!isFar) {
-            skippedInRangeCount += 1;
-            actions.push({
+            outcome.skippedInRange += 1;
+            outcome.actions.push({
               botId: bot.id,
               marketId: position.marketId,
               token,
@@ -462,8 +506,8 @@ export class SellEngine {
           }
 
           if (!rollChance(this.sellChance, this.random)) {
-            skippedChanceCount += 1;
-            actions.push({
+            outcome.skippedChance += 1;
+            outcome.actions.push({
               botId: bot.id,
               marketId: position.marketId,
               token,
@@ -482,8 +526,8 @@ export class SellEngine {
             mode === "partial" ? pickPartialSellAmount(position.amount, this.random) : roundToFixed(position.amount);
 
           if (requestedSellAmount <= 0) {
-            skippedInvalidAmountCount += 1;
-            actions.push({
+            outcome.skippedInvalidAmount += 1;
+            outcome.actions.push({
               botId: bot.id,
               marketId: position.marketId,
               token,
@@ -503,8 +547,8 @@ export class SellEngine {
             });
 
             if (mode === "full") {
-              soldFullCount += 1;
-              actions.push({
+              outcome.soldFull += 1;
+              outcome.actions.push({
                 botId: bot.id,
                 marketId: position.marketId,
                 token,
@@ -514,8 +558,8 @@ export class SellEngine {
                 txId: tx.txId
               });
             } else {
-              soldPartialCount += 1;
-              actions.push({
+              outcome.soldPartial += 1;
+              outcome.actions.push({
                 botId: bot.id,
                 marketId: position.marketId,
                 token,
@@ -526,8 +570,8 @@ export class SellEngine {
               });
             }
           } catch (error) {
-            failedSubmitCount += 1;
-            actions.push({
+            outcome.failedSubmit += 1;
+            outcome.actions.push({
               botId: bot.id,
               marketId: position.marketId,
               token,
@@ -538,6 +582,24 @@ export class SellEngine {
             });
           }
         }
+        return outcome;
+      };
+
+      const settled = await Promise.allSettled(bots.map((bot) => runBot(bot)));
+      for (const r of settled) {
+        if (r.status !== "fulfilled") continue;
+        const o = r.value;
+        actions.push(...o.actions);
+        positionsConsidered += o.positionsConsidered;
+        soldFullCount += o.soldFull;
+        soldPartialCount += o.soldPartial;
+        skippedInRangeCount += o.skippedInRange;
+        skippedChanceCount += o.skippedChance;
+        skippedMissingPriceCount += o.skippedMissingPrice;
+        skippedStalePriceCount += o.skippedStalePrice;
+        skippedNoReferenceCount += o.skippedNoReference;
+        skippedInvalidAmountCount += o.skippedInvalidAmount;
+        failedSubmitCount += o.failedSubmit;
       }
 
       const requestedTokenCount = new Set(marketsForPricing.map((market) => market.collateralMint)).size;

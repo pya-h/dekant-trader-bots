@@ -1,8 +1,10 @@
 import postgres from "postgres";
 import type { StructuredLogger } from "../observability/logger.js";
 import {
+  BotPositionMemoryFile,
   BotsStateFile,
   RuntimeConfigFile,
+  botPositionMemoryFileSchema,
   botsStateFileSchema,
   runtimeConfigFileSchema
 } from "../state/types.js";
@@ -13,6 +15,10 @@ export class PgStateStore implements StateStore {
 
   constructor(databaseUrl: string, logger?: StructuredLogger) {
     this.sql = postgres(databaseUrl, {
+      ssl: process.env.PGSSL === "disable" ? false : "require",
+      idle_timeout: 20,
+      connect_timeout: 10,
+      max: 10,
       onnotice: (notice) => {
         const fields = {
           severity: notice.severity,
@@ -82,6 +88,26 @@ export class PgStateStore implements StateStore {
     await this.sql`
       INSERT INTO app_state (key, data, updated_at)
       VALUES ('bots_state', ${this.sql.json(validated)}, now())
+      ON CONFLICT (key)
+      DO UPDATE SET data = ${this.sql.json(validated)}, updated_at = now()
+    `;
+  }
+
+  async loadBotPositionMemory(): Promise<BotPositionMemoryFile | null> {
+    const rows = await this.sql`
+      SELECT data FROM app_state WHERE key = 'bot_position_memory'
+    `;
+    if (rows.length === 0) {
+      return null;
+    }
+    return botPositionMemoryFileSchema.parse(rows[0].data);
+  }
+
+  async saveBotPositionMemory(memory: BotPositionMemoryFile): Promise<void> {
+    const validated = botPositionMemoryFileSchema.parse(memory);
+    await this.sql`
+      INSERT INTO app_state (key, data, updated_at)
+      VALUES ('bot_position_memory', ${this.sql.json(validated)}, now())
       ON CONFLICT (key)
       DO UPDATE SET data = ${this.sql.json(validated)}, updated_at = now()
     `;

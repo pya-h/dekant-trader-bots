@@ -1,4 +1,4 @@
-import { BotsStateFile, RuntimeConfigFile } from "../state/types.js";
+import { BotPositionMemoryFile, BotsStateFile, RuntimeConfigFile } from "../state/types.js";
 
 export interface StateStore {
   initialize(): Promise<void>;
@@ -7,4 +7,6 @@ export interface StateStore {
   saveRuntimeConfig(config: RuntimeConfigFile): Promise<void>;
   loadBotsState(): Promise<BotsStateFile | null>;
   saveBotsState(state: BotsStateFile): Promise<void>;
+  loadBotPositionMemory(): Promise<BotPositionMemoryFile | null>;
+  saveBotPositionMemory(memory: BotPositionMemoryFile): Promise<void>;
 }

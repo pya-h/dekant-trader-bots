@@ -1,6 +1,8 @@
 import {
+  BotPositionMemoryFile,
   BotsStateFile,
   RuntimeConfigFile,
+  botPositionMemoryFileSchema,
   botsStateFileSchema,
   runtimeConfigFileSchema
 } from "../../src/state/types.js";
@@ -9,6 +11,7 @@ import type { StateStore } from "../../src/storage/state-store.js";
 export class InMemoryStateStore implements StateStore {
   private runtimeConfig: RuntimeConfigFile | null = null;
   private botsState: BotsStateFile | null = null;
+  private botPositionMemory: BotPositionMemoryFile | null = null;
 
   async initialize(): Promise<void> {}
 
@@ -28,5 +31,13 @@ export class InMemoryStateStore implements StateStore {
 
   async saveBotsState(state: BotsStateFile): Promise<void> {
     this.botsState = botsStateFileSchema.parse(state);
+  }
+
+  async loadBotPositionMemory(): Promise<BotPositionMemoryFile | null> {
+    return this.botPositionMemory;
+  }
+
+  async saveBotPositionMemory(memory: BotPositionMemoryFile): Promise<void> {
+    this.botPositionMemory = botPositionMemoryFileSchema.parse(memory);
   }
 }

@@ -9,6 +9,15 @@ function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
 }
 
+function shuffled<T>(items: readonly T[], random: () => number): T[] {
+  const copy = items.slice();
+  for (let i = copy.length - 1; i > 0; i--) {
+    const j = Math.floor(random() * (i + 1));
+    [copy[i], copy[j]] = [copy[j], copy[i]];
+  }
+  return copy;
+}
+
 function roundToFixed(value: number): number {
   return Number(value.toFixed(6));
 }
@@ -186,6 +195,14 @@ export type BuyEngineCycleErrorContext = {
   stage: "immediate" | "interval";
 };
 
+export type BuyEngineSubmittedEvent = {
+  bot: BotRecord;
+  marketId: string;
+  center: number;
+  spread: number;
+  collateralAmount: number;
+};
+
 const defaultIntervalProvider: BuyEngineIntervalProvider = {
   setInterval: (handler, intervalMs) => setInterval(handler, intervalMs),
   clearInterval: (handle) => clearInterval(handle as NodeJS.Timeout)
@@ -203,6 +220,7 @@ export class BuyEngine {
   private readonly now: () => Date;
   private readonly timer: BuyEngineIntervalProvider;
   private readonly onCycleError?: (error: unknown, context: BuyEngineCycleErrorContext) => void | Promise<void>;
+  private readonly onSubmitted?: (event: BuyEngineSubmittedEvent) => void;
 
   private intervalHandle: unknown = null;
   private running = false;
@@ -226,6 +244,7 @@ export class BuyEngine {
     now?: () => Date;
     timer?: BuyEngineIntervalProvider;
     onCycleError?: (error: unknown, context: BuyEngineCycleErrorContext) => void | Promise<void>;
+    onSubmitted?: (event: BuyEngineSubmittedEvent) => void;
   }) {
     this.buyChance = options.runtime.buyChance;
     this.maxAmount = options.runtime.maxAmount;
@@ -238,6 +257,7 @@ export class BuyEngine {
     this.now = options.now ?? (() => new Date());
     this.timer = options.timer ?? defaultIntervalProvider;
     this.onCycleError = options.onCycleError;
+    this.onSubmitted = options.onSubmitted;
   }
 
   private notifyCycleError(error: unknown, context: BuyEngineCycleErrorContext): void {
@@ -385,19 +405,41 @@ export class BuyEngine {
       let failedSubmitCount = 0;
       const requestedTokenCount = new Set(selectedMarkets.map((market) => market.collateralMint)).size;
 
-      for (const bot of bots) {
+      // Per-bot work runs concurrently. Inside a bot, market iteration is
+      // sequential (the anti-correlation in `previous` depends on serial order)
+      // but the market order itself is shuffled per cycle so late iterations
+      // don't always penalize the same markets.
+      type BotOutcome = {
+        actions: BuyCycleAction[];
+        submitted: number;
+        skippedChance: number;
+        skippedMissingPrice: number;
+        skippedStalePrice: number;
+        failedSubmit: number;
+      };
+
+      const runBot = async (bot: BotRecord): Promise<BotOutcome> => {
+        const outcome: BotOutcome = {
+          actions: [],
+          submitted: 0,
+          skippedChance: 0,
+          skippedMissingPrice: 0,
+          skippedStalePrice: 0,
+          failedSubmit: 0
+        };
         const previous = this.botState.get(bot.id) ?? {
           tradeCount: 0,
           collateral: 0
         };
+        const orderedMarkets = shuffled(selectedMarkets, this.random);
 
-        for (const market of selectedMarkets) {
+        for (const market of orderedMarkets) {
           const marketPrice = priceResolution.byMarketId.get(market.id);
           const token = market.collateralMint;
 
           if (!marketPrice || marketPrice.status === "missing") {
-            skippedMissingPriceCount += 1;
-            actions.push({
+            outcome.skippedMissingPrice += 1;
+            outcome.actions.push({
               botId: bot.id,
               marketId: market.id,
               token,
@@ -407,8 +449,8 @@ export class BuyEngine {
           }
 
           if (marketPrice.status === "stale") {
-            skippedStalePriceCount += 1;
-            actions.push({
+            outcome.skippedStalePrice += 1;
+            outcome.actions.push({
               botId: bot.id,
               marketId: market.id,
               token,
@@ -418,8 +460,8 @@ export class BuyEngine {
           }
 
           if (!rollChance(this.buyChance, this.random)) {
-            skippedChanceCount += 1;
-            actions.push({
+            outcome.skippedChance += 1;
+            outcome.actions.push({
               botId: bot.id,
               marketId: market.id,
               token,
@@ -429,8 +471,8 @@ export class BuyEngine {
           }
 
           if (!marketPrice.quote) {
-            skippedMissingPriceCount += 1;
-            actions.push({
+            outcome.skippedMissingPrice += 1;
+            outcome.actions.push({
               botId: bot.id,
               marketId: market.id,
               token,
@@ -468,8 +510,22 @@ export class BuyEngine {
             previous.collateral = roundToFixed(previous.collateral + collateralAmount);
             this.botState.set(bot.id, previous);
 
-            submittedCount += 1;
-            actions.push({
+            if (this.onSubmitted) {
+              try {
+                this.onSubmitted({
+                  bot,
+                  marketId: market.id,
+                  center: prediction.center,
+                  spread: prediction.spread,
+                  collateralAmount
+                });
+              } catch {
+                // never let listener bookkeeping crash the cycle
+              }
+            }
+
+            outcome.submitted += 1;
+            outcome.actions.push({
               botId: bot.id,
               marketId: market.id,
               token,
@@ -480,8 +536,8 @@ export class BuyEngine {
               txId: tx.txId
             });
           } catch (error) {
-            failedSubmitCount += 1;
-            actions.push({
+            outcome.failedSubmit += 1;
+            outcome.actions.push({
               botId: bot.id,
               marketId: market.id,
               token,
@@ -493,6 +549,19 @@ export class BuyEngine {
             });
           }
         }
+        return outcome;
+      };
+
+      const settled = await Promise.allSettled(bots.map((bot) => runBot(bot)));
+      for (const result of settled) {
+        if (result.status !== "fulfilled") continue;
+        const o = result.value;
+        actions.push(...o.actions);
+        submittedCount += o.submitted;
+        skippedChanceCount += o.skippedChance;
+        skippedMissingPriceCount += o.skippedMissingPrice;
+        skippedStalePriceCount += o.skippedStalePrice;
+        failedSubmitCount += o.failedSubmit;
       }
 
       const result: BuyCycleResult = {
