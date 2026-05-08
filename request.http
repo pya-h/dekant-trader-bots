@@ -1,0 +1,166 @@
+@baseUrl = https://bot.dekant.xyz/
+@adminSecret = SECRET
+
+### Health Check
+GET {{baseUrl}}/health
+
+### ─────────────────────────────────────────────
+### Admin Endpoints (require x-security header)
+### ─────────────────────────────────────────────
+
+### Status
+GET {{baseUrl}}/admin/status
+x-security: {{adminSecret}}
+
+### Stats (paginated)
+GET {{baseUrl}}/admin/stats?page=1&page_size=10
+x-security: {{adminSecret}}
+
+### Bot Balances (paginated)
+GET {{baseUrl}}/admin/bots/balances?page=1&page_size=10
+x-security: {{adminSecret}}
+
+### ─────────────────────────────────────────────
+### Trading
+### ─────────────────────────────────────────────
+
+### Force Buy Cycle (all markets)
+POST {{baseUrl}}/admin/bots/buy
+x-security: {{adminSecret}}
+Content-Type: application/json
+
+{}
+
+### Force Buy Cycle (specific markets)
+POST {{baseUrl}}/admin/bots/buy
+x-security: {{adminSecret}}
+Content-Type: application/json
+
+{
+  "market_ids": ["market-id-1", "market-id-2"]
+}
+
+### Force Sell Cycle (all markets)
+POST {{baseUrl}}/admin/bots/sell
+x-security: {{adminSecret}}
+Content-Type: application/json
+
+{}
+
+### Force Sell Cycle (specific markets)
+POST {{baseUrl}}/admin/bots/sell
+x-security: {{adminSecret}}
+Content-Type: application/json
+
+{
+  "market_ids": ["market-id-1"]
+}
+
+### ─────────────────────────────────────────────
+### Bot Management
+### ─────────────────────────────────────────────
+
+### Add Bots
+POST {{baseUrl}}/admin/bots/add
+x-security: {{adminSecret}}
+Content-Type: application/json
+
+{
+  "count": 3
+}
+
+### ─────────────────────────────────────────────
+### Funding
+### ─────────────────────────────────────────────
+
+### Manual Fund (all bots, default amount & token)
+POST {{baseUrl}}/admin/bots/fund
+x-security: {{adminSecret}}
+Content-Type: application/json
+
+{
+  "amount": 100000000
+}
+
+### Manual Fund (specific bots by ID)
+POST {{baseUrl}}/admin/bots/fund
+x-security: {{adminSecret}}
+Content-Type: application/json
+
+{
+  "bot_ids": ["bot-id-1", "bot-id-2"]
+}
+
+### Manual Fund (specific addresses, custom amount & token)
+POST {{baseUrl}}/admin/bots/fund
+x-security: {{adminSecret}}
+Content-Type: application/json
+
+{
+  "addresses": ["SoLaNaPuBkEy1111111111111111111111111111111"],
+  "amount": 5.0,
+  "token": "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU"
+}
+
+### ─────────────────────────────────────────────
+### Market Ignore List
+### ─────────────────────────────────────────────
+
+### Add Ignored Markets
+POST {{baseUrl}}/admin/markets/ignored/add
+x-security: {{adminSecret}}
+Content-Type: application/json
+
+{
+  "market_ids": ["market-to-ignore-1"]
+}
+
+### Remove Ignored Markets
+POST {{baseUrl}}/admin/markets/ignored/remove
+x-security: {{adminSecret}}
+Content-Type: application/json
+
+{
+  "market_ids": ["market-to-unignore-1"]
+}
+
+### ─────────────────────────────────────────────
+### Runtime Config
+### ─────────────────────────────────────────────
+
+### Update Trading Config
+PATCH {{baseUrl}}/admin/config
+x-security: {{adminSecret}}
+Content-Type: application/json
+
+{
+  "trading": {
+    "buyChance": 80,
+    "sellChance": 50,
+    "maxAmount": 1000,
+    "prefundMultiplier": 2
+  }
+}
+
+### Update Funding Config
+PATCH {{baseUrl}}/admin/config
+x-security: {{adminSecret}}
+Content-Type: application/json
+
+{
+  "funding": {
+    "minBotSol": 0.1,
+    "emergencyTopupCooldownMs": 60000
+  }
+}
+
+### Update Price Policy
+PATCH {{baseUrl}}/admin/config
+x-security: {{adminSecret}}
+Content-Type: application/json
+
+{
+  "price": {
+    "stalePricePolicy": "skip"
+  }
+}

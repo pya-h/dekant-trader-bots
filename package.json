@@ -14,7 +14,8 @@
     "format:check": "prettier --check .",
     "test": "npm run test:unit && npm run test:e2e",
     "test:unit": "vitest run --config vitest.unit.config.ts",
-    "test:e2e": "vitest run --config vitest.e2e.config.ts"
+    "test:e2e": "vitest run --config vitest.e2e.config.ts",
+    "panel": "node panel-server.mjs"
   },
   "dependencies": {
     "@coral-xyz/anchor": "^0.32.1",
