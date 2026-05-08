@@ -34,9 +34,19 @@ export class SolanaBalanceClient implements BalanceClient {
       const parsed = account.data.parsed;
       const info = parsed?.info;
       const mint: string | undefined = info?.mint;
-      const uiAmount: number = info?.tokenAmount?.uiAmount ?? 0;
       if (!mint || !requestedMints.has(mint)) {
         continue;
+      }
+      const tokenAmount = info?.tokenAmount;
+      const amountStr: string | undefined = tokenAmount?.amount;
+      const decimals: number | undefined = tokenAmount?.decimals;
+      let uiAmount = 0;
+      if (typeof amountStr === "string" && typeof decimals === "number") {
+        uiAmount = Number(amountStr) / Math.pow(10, decimals);
+      } else if (typeof tokenAmount?.uiAmountString === "string") {
+        uiAmount = Number(tokenAmount.uiAmountString);
+      } else {
+        uiAmount = tokenAmount?.uiAmount ?? 0;
       }
       balances[mint] = (balances[mint] ?? 0) + uiAmount;
     }
