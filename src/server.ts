@@ -611,7 +611,7 @@ export async function createInitializedApp(
         monitor: runtimeMonitor,
         logger,
         job: "market_refresh",
-        error: result.error ?? "market_refresh_failed",
+        error: result.rawError ?? result.error ?? "market_refresh_failed",
         event: "market_refresh_failed",
         context: {
           cycleType: "market_refresh"
