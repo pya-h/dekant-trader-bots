@@ -252,9 +252,9 @@ describe("full system e2e", () => {
 
     const markets: DekantMarket[] = [
       { id: "m1", subject: "BTC",
-      collateralMint: "Mint11111111111111111111111111111111111111", category: "crypto", state: 0, liquidity: 300_000 },
+      collateralMint: "Mint11111111111111111111111111111111111111", marketType: 2, category: "crypto", state: 0, liquidity: 300_000 },
       { id: "m2", subject: "ETH",
-      collateralMint: "Mint11111111111111111111111111111111111111", category: "crypto", state: 0, liquidity: 220_000 }
+      collateralMint: "Mint11111111111111111111111111111111111111", marketType: 2, category: "crypto", state: 0, liquidity: 220_000 }
     ];
 
     const positionsByBotId = createPositionsByBot(bots, markets);
@@ -333,7 +333,7 @@ describe("full system e2e", () => {
       .send({ market_ids: ["m2"] });
 
     expect(manualSell.status).toBe(200);
-    expect(manualSell.body.cycle.soldFullCount + manualSell.body.cycle.soldPartialCount).toBeGreaterThan(0);
+    expect(manualSell.body.cycle.soldFullCount).toBeGreaterThan(0);
 
     const manualFund = await request(appCtx.app.server)
       .post("/admin/bots/fund")
@@ -387,17 +387,17 @@ describe("full system e2e", () => {
 
     const markets: DekantMarket[] = [
       { id: "m1", subject: "BTC",
-      collateralMint: "Mint11111111111111111111111111111111111111", category: "crypto", state: 0, liquidity: 400_000 },
+      collateralMint: "Mint11111111111111111111111111111111111111", marketType: 2, category: "crypto", state: 0, liquidity: 400_000 },
       { id: "m2", subject: "ETH",
-      collateralMint: "Mint11111111111111111111111111111111111111", category: "crypto", state: 0, liquidity: 300_000 },
+      collateralMint: "Mint11111111111111111111111111111111111111", marketType: 2, category: "crypto", state: 0, liquidity: 300_000 },
       { id: "m3", subject: "SOL",
-      collateralMint: "Mint11111111111111111111111111111111111111", category: "crypto", state: 0, liquidity: 260_000 },
+      collateralMint: "Mint11111111111111111111111111111111111111", marketType: 2, category: "crypto", state: 0, liquidity: 260_000 },
       { id: "m4", subject: "AVAX",
-      collateralMint: "Mint11111111111111111111111111111111111111", category: "crypto", state: 0, liquidity: 220_000 },
+      collateralMint: "Mint11111111111111111111111111111111111111", marketType: 2, category: "crypto", state: 0, liquidity: 220_000 },
       { id: "m5", subject: "XRP",
-      collateralMint: "Mint11111111111111111111111111111111111111", category: "crypto", state: 0, liquidity: 210_000 },
+      collateralMint: "Mint11111111111111111111111111111111111111", marketType: 2, category: "crypto", state: 0, liquidity: 210_000 },
       { id: "m6", subject: "DOGE",
-      collateralMint: "Mint11111111111111111111111111111111111111", category: "crypto", state: 0, liquidity: 180_000 }
+      collateralMint: "Mint11111111111111111111111111111111111111", marketType: 2, category: "crypto", state: 0, liquidity: 180_000 }
     ];
 
     const positionsByBotId = createPositionsByBot(bots, markets.slice(0, 3));
@@ -453,7 +453,7 @@ describe("full system e2e", () => {
 
     expect(sellScoped.status).toBe(200);
     expect(sellScoped.body.cycle.failedSubmitCount).toBeGreaterThan(0);
-    expect(sellScoped.body.cycle.soldFullCount + sellScoped.body.cycle.soldPartialCount).toBeGreaterThan(0);
+    expect(sellScoped.body.cycle.soldFullCount).toBeGreaterThan(0);
 
     const status = await request(appCtx.app.server)
       .get("/admin/status")
@@ -485,9 +485,9 @@ describe("full system e2e", () => {
 
     const markets: DekantMarket[] = [
       { id: "m1", subject: "BTC",
-      collateralMint: "Mint11111111111111111111111111111111111111", category: "crypto", state: 0, liquidity: 100_000 },
+      collateralMint: "Mint11111111111111111111111111111111111111", marketType: 2, category: "crypto", state: 0, liquidity: 100_000 },
       { id: "m2", subject: "ETH",
-      collateralMint: "Mint11111111111111111111111111111111111111", category: "crypto", state: 0, liquidity: 100_000 }
+      collateralMint: "Mint11111111111111111111111111111111111111", marketType: 2, category: "crypto", state: 0, liquidity: 100_000 }
     ];
 
     const firstDekant: DekantClient = {

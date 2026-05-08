@@ -105,7 +105,7 @@ export class TradeStatsStore {
     for (const action of cycle.actions) {
       const row = this.getOrCreate(action.botId);
 
-      if (action.status === "sold_full" || action.status === "sold_partial") {
+      if (action.status === "sold_full") {
         const amount = action.requestedSellAmount ?? 0;
         row.sellTrades += 1;
         row.sellVolume = roundToFixed(row.sellVolume + amount);

@@ -8,13 +8,13 @@ describe("core regression guards", () => {
     const result = filterEligibleMarkets({
       markets: [
         { id: "m1", subject: "BTC",
-      collateralMint: "Mint11111111111111111111111111111111111111", category: "crypto", state: 0 },
+      collateralMint: "Mint11111111111111111111111111111111111111", marketType: 2, category: "crypto", state: 0 },
         { id: "m2", subject: "ETH",
-      collateralMint: "Mint11111111111111111111111111111111111111", category: "sports", state: 0 },
+      collateralMint: "Mint11111111111111111111111111111111111111", marketType: 2, category: "sports", state: 0 },
         { id: "m3", subject: "SOL",
-      collateralMint: "Mint11111111111111111111111111111111111111", category: "crypto", state: 3 },
+      collateralMint: "Mint11111111111111111111111111111111111111", marketType: 2, category: "crypto", state: 3 },
         { id: "m4", subject: "AVAX",
-      collateralMint: "Mint11111111111111111111111111111111111111", category: "crypto", state: 0 }
+      collateralMint: "Mint11111111111111111111111111111111111111", marketType: 2, category: "crypto", state: 0 }
       ],
       ignoredMarketIds: new Set(["m4"])
     });

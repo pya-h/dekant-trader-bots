@@ -19,7 +19,7 @@ describe("SellEngine with stored position center", () => {
       {
         id: "m1",
         subject: "BTC",
-        collateralMint: "Mint11111111111111111111111111111111111111",
+        collateralMint: "Mint11111111111111111111111111111111111111", marketType: 2,
         deadline: "2026-07-01T00:00:00.000Z"
       }
     ];
@@ -40,8 +40,7 @@ describe("SellEngine with stored position center", () => {
     const engine = new SellEngine({
       runtime: {
         sellChance: 100,
-        intervalMs: 1_000,
-        partialBiasPercent: 0
+        intervalMs: 1_000
       },
       clients: {
         price: {
@@ -104,7 +103,7 @@ describe("SellEngine with stored position center", () => {
       {
         id: "m1",
         subject: "BTC",
-        collateralMint: "Mint11111111111111111111111111111111111111",
+        collateralMint: "Mint11111111111111111111111111111111111111", marketType: 2,
         deadline: "2026-07-01T00:00:00.000Z"
       }
     ];
