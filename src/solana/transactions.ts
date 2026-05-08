@@ -75,6 +75,43 @@ function parseAnchorError(logs: string[] | null | undefined): {
   return out;
 }
 
+const SPL_TOKEN_ERRORS: Record<number, string> = {
+  0x0: "NotRentExempt",
+  0x1: "InsufficientFunds",
+  0x2: "InvalidMint",
+  0x3: "MintMismatch",
+  0x4: "OwnerMismatch",
+  0x5: "FixedSupply",
+  0x6: "AlreadyInUse",
+  0x7: "InvalidNumberOfProvidedSigners",
+  0x8: "InvalidNumberOfRequiredSigners",
+  0x9: "UninitializedState",
+  0xa: "NativeNotSupported",
+  0xb: "NonNativeHasBalance",
+  0xc: "InvalidInstruction",
+  0xd: "InvalidState",
+  0xe: "Overflow",
+  0xf: "AuthorityTypeNotSupported",
+  0x10: "MintCannotFreeze",
+  0x11: "AccountFrozen",
+  0x12: "MintDecimalsMismatch",
+  0x13: "NonNativeNotSupported"
+};
+
+function parseSplTokenError(logs: string[] | null | undefined): { code?: string; line?: string } {
+  if (!logs) return {};
+  for (const line of logs) {
+    const m = line.match(/Token[^\s]*\s+failed:\s+custom program error:\s+0x([0-9a-fA-F]+)/);
+    if (m) {
+      const num = Number.parseInt(m[1], 16);
+      return { code: SPL_TOKEN_ERRORS[num] ?? `0x${m[1]}`, line };
+    }
+    const direct = line.match(/Program log: Error:\s+(.+?)\.?$/);
+    if (direct) return { code: direct[1].replace(/\s+/g, ""), line };
+  }
+  return {};
+}
+
 function getAta(mint: PublicKey, owner: PublicKey): PublicKey {
   const [address] = PublicKey.findProgramAddressSync(
     [owner.toBuffer(), TOKEN_PROGRAM_ID.toBuffer(), mint.toBuffer()],
@@ -184,6 +221,10 @@ async function simulateOrThrow(
       }
       if (anchor.account) parts.push(`account=${anchor.account}`);
       if (anchor.message) parts.push(`reason="${anchor.message}"`);
+      if (!anchor.code) {
+        const spl = parseSplTokenError(logs);
+        if (spl.code) parts.push(`spl_token=${spl.code}`);
+      }
       throw new SimulationError(parts.join(" "), logs, anchor);
     }
   } catch (error) {

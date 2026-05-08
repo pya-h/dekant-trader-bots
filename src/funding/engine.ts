@@ -74,6 +74,70 @@ export type ManualFundResult = {
   results: BotFundingResult[];
 };
 
+export function summarizePrefundResult(result: ManualFundResult) {
+  let solFunded = 0;
+  let solSkipped = 0;
+  let solAmount = 0;
+  const tokenStatusCounts: Record<string, number> = {};
+  const tokenAmountFunded: Record<string, number> = {};
+  const vaultMissingMints = new Set<string>();
+  const botsShortByMint: Record<string, string[]> = {};
+  const botSummaries: Array<{
+    botId: string;
+    address: string;
+    sol: BotFundingResult["sol"];
+    tokens: Array<{ token: string; status: string; amount?: number; reason?: string }>;
+  }> = [];
+
+  for (const bot of result.results) {
+    if (bot.sol.status === "funded") {
+      solFunded += 1;
+      solAmount += bot.sol.amount ?? 0;
+    } else {
+      solSkipped += 1;
+    }
+
+    const tokens: Array<{ token: string; status: string; amount?: number; reason?: string }> = [];
+    for (const action of bot.tokenActions) {
+      tokenStatusCounts[action.status] = (tokenStatusCounts[action.status] ?? 0) + 1;
+      if (action.status === "funded" && action.amount !== undefined) {
+        tokenAmountFunded[action.token] = (tokenAmountFunded[action.token] ?? 0) + action.amount;
+      }
+      if (action.reason === "vault_missing_mint") {
+        vaultMissingMints.add(action.token);
+      }
+      if (action.status !== "funded" && action.status !== "skipped_sufficient") {
+        (botsShortByMint[action.token] ??= []).push(bot.botId);
+      }
+      tokens.push({
+        token: action.token,
+        status: action.status,
+        amount: action.amount,
+        reason: action.reason
+      });
+    }
+
+    botSummaries.push({
+      botId: bot.botId,
+      address: bot.address,
+      sol: bot.sol,
+      tokens
+    });
+  }
+
+  return {
+    botCount: result.results.length,
+    solFunded,
+    solSkipped,
+    solAmount: Number(solAmount.toFixed(6)),
+    tokenStatusCounts,
+    tokenAmountFunded,
+    vaultMissingMints: Array.from(vaultMissingMints),
+    botsShortByMint,
+    bots: botSummaries
+  };
+}
+
 function unique<T>(items: T[]): T[] {
   return [...new Set(items)];
 }
