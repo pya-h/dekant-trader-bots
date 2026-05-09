@@ -669,6 +669,135 @@
 
   /* Button group separator */
   .actions-row > .btn + .btn.danger { margin-left: 2px; }
+
+  /* Clickable balance rows */
+  #balBody tr { cursor: pointer; }
+  #balBody tr:hover td { background: var(--surface3); }
+
+  /* Bot detail popover (small modal) */
+  .popover-overlay {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.45);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    display: none; align-items: center; justify-content: center;
+    z-index: 200;
+    animation: fadeIn 0.15s;
+    padding: 24px;
+  }
+  .popover-overlay.active { display: flex; }
+  .popover {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    width: 100%; max-width: 420px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.03);
+    animation: modalIn 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .popover-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--border);
+  }
+  .popover-header h3 { font-size: 13px; font-weight: 600; }
+  .popover-body { padding: 16px 18px; }
+  .popover-overlay.closing { opacity: 0; transition: opacity 0.15s ease; }
+  .popover-overlay.closing .popover { transform: scale(0.96); opacity: 0; transition: all 0.15s ease; }
+
+  /* Token list inside popover */
+  .token-list { list-style: none; }
+  .token-item {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 10px 12px;
+    border-radius: var(--radius-sm);
+    background: var(--surface2);
+    margin-bottom: 6px;
+    transition: all var(--transition);
+  }
+  .token-item:last-child { margin-bottom: 0; }
+  .token-item:hover { background: var(--surface3); }
+  .token-item .token-mint {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; color: var(--text2);
+    max-width: 180px; overflow: hidden;
+    text-overflow: ellipsis; white-space: nowrap;
+  }
+  .token-item .token-amount {
+    font-size: 14px; font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+  .token-item.sol-row { border-left: 3px solid var(--yellow); }
+  .token-item.token-row { border-left: 3px solid var(--purple); }
+  .token-empty {
+    text-align: center; padding: 20px;
+    color: var(--text2); font-size: 12px;
+  }
+
+  /* Entity picker (input + browse button wrapper) */
+  .input-with-picker {
+    position: relative;
+    display: flex; gap: 0;
+  }
+  .input-with-picker input {
+    flex: 1;
+    border-top-right-radius: 0;
+    border-bottom-right-radius: 0;
+  }
+  .picker-btn {
+    display: flex; align-items: center; justify-content: center;
+    width: 34px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-left: none;
+    border-radius: 0 6px 6px 0;
+    color: var(--text2);
+    cursor: pointer;
+    transition: all var(--transition);
+    flex-shrink: 0;
+  }
+  .picker-btn:hover { background: var(--surface3); color: var(--accent); }
+
+  /* Entity picker dropdown */
+  .picker-dropdown {
+    position: absolute;
+    top: 100%; left: 0; right: 0;
+    margin-top: 4px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    box-shadow: var(--shadow-lg);
+    max-height: 220px;
+    overflow-y: auto;
+    z-index: 60;
+    display: none;
+    animation: tabFadeIn 0.15s ease-out;
+  }
+  .picker-dropdown.active { display: block; }
+  .picker-dropdown .picker-search {
+    position: sticky; top: 0;
+    padding: 8px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+  }
+  .picker-dropdown .picker-search input {
+    border-radius: 6px;
+    font-size: 11px;
+    padding: 6px 10px;
+  }
+  .picker-item {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 7px 12px;
+    font-size: 11px;
+    cursor: pointer;
+    transition: background var(--transition);
+    border-bottom: 1px solid rgba(33,40,58,0.3);
+  }
+  .picker-item:last-child { border-bottom: none; }
+  .picker-item:hover { background: var(--surface2); }
+  .picker-item .picker-id { font-family: 'JetBrains Mono', monospace; color: var(--text); }
+  .picker-item .picker-addr { font-family: 'JetBrains Mono', monospace; color: var(--text2); font-size: 10px; }
+  .picker-item .picker-check { color: var(--green); font-weight: 700; display: none; }
+  .picker-item.selected .picker-check { display: inline; }
 </style>
 </head>
 <body>
@@ -717,7 +846,13 @@
     </div>
     <div class="field">
       <label>Market IDs (comma separated, leave empty for all)</label>
-      <input id="marketIdsInput" placeholder="e.g. market-id-1, market-id-2">
+      <div class="input-with-picker">
+        <input id="marketIdsInput" placeholder="e.g. market-id-1, market-id-2">
+        <button class="picker-btn" onclick="togglePicker('marketPicker', 'market')" title="Browse markets">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"/><path d="M3 12h18"/><path d="M3 18h18"/></svg>
+        </button>
+        <div class="picker-dropdown" id="marketPicker"></div>
+      </div>
     </div>
     <div class="response-box" id="quickResponse"><pre></pre></div>
   </div>
@@ -850,7 +985,13 @@
         <div class="card-title">Manual Fund</div>
         <div class="field">
           <label>Bot IDs (comma separated, leave empty for all)</label>
-          <input id="fundBotIds" placeholder="bot-1, bot-2">
+          <div class="input-with-picker">
+            <input id="fundBotIds" placeholder="bot-1, bot-2">
+            <button class="picker-btn" onclick="togglePicker('fundBotPicker', 'bot')" title="Browse bots">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"/><path d="M3 12h18"/><path d="M3 18h18"/></svg>
+            </button>
+            <div class="picker-dropdown" id="fundBotPicker"></div>
+          </div>
         </div>
         <div class="field">
           <label>Addresses (comma separated)</label>
@@ -875,7 +1016,13 @@
         <div class="card-title">Ignored Markets</div>
         <div class="field">
           <label>Market IDs (comma separated)</label>
-          <input id="ignoredMarketIds" placeholder="market-id-1, market-id-2">
+          <div class="input-with-picker">
+            <input id="ignoredMarketIds" placeholder="market-id-1, market-id-2">
+            <button class="picker-btn" onclick="togglePicker('ignoredMarketPicker', 'market')" title="Browse markets">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"/><path d="M3 12h18"/><path d="M3 18h18"/></svg>
+            </button>
+            <div class="picker-dropdown" id="ignoredMarketPicker"></div>
+          </div>
         </div>
         <div class="actions-row" style="margin-top: 4px">
           <button class="btn success sm" id="btnIgnoreAdd" onclick="addIgnored()"><span class="spinner"></span> Add to Ignored</button>
@@ -966,6 +1113,17 @@
       </div>
 
     </div>
+  </div>
+</div>
+
+<!-- Bot Balance Popover -->
+<div class="popover-overlay" id="botPopoverOverlay" onclick="if(event.target===this)closeBotPopover()">
+  <div class="popover">
+    <div class="popover-header">
+      <h3 id="botPopoverTitle">Bot Balances</h3>
+      <button class="modal-close" onclick="closeBotPopover()">&times;</button>
+    </div>
+    <div class="popover-body" id="botPopoverBody"></div>
   </div>
 </div>
 
@@ -1076,6 +1234,8 @@ function fmtNumFull(n) {
 let cachedStatus = null;
 let cachedStatsData = null;
 let cachedBalData = null;
+let cachedBotList = null;
+let cachedMarketList = null;
 let statsPage = 1;
 let balPage = 1;
 const PAGE_SIZE = 10;
@@ -1246,7 +1406,11 @@ function renderBalancesTable(data) {
   body.innerHTML = '';
   (data.items || []).forEach(item => {
     const tokens = item.tokens || {};
-    const tokenStr = Object.entries(tokens).map(([k,v]) => `${shortAddr(k)}: ${fmtNumFull(v)}`).join(', ') || '--';
+    const tokenCount = Object.keys(tokens).length;
+    const tokenStr = tokenCount > 0
+      ? Object.entries(tokens).slice(0, 2).map(([k,v]) => `${shortAddr(k)}: ${fmtNumFull(v)}`).join(', ')
+        + (tokenCount > 2 ? ` +${tokenCount - 2} more` : '')
+      : '--';
     const tr = document.createElement('tr');
     tr.innerHTML = `
       <td class="mono">${item.botId || '--'}</td>
@@ -1254,6 +1418,10 @@ function renderBalancesTable(data) {
       <td>${fmtNumFull(item.sol)}</td>
       <td style="font-size:11px">${tokenStr}</td>
     `;
+    tr.onclick = (e) => {
+      if (e.target.closest('.copy-addr')) return;
+      openBotPopover(item);
+    };
     body.appendChild(tr);
   });
   document.getElementById('balPageInfo').textContent =
@@ -1405,6 +1573,7 @@ async function addBots() {
     const data = await api('POST', '/admin/bots/add', { count });
     toast(`Added ${count} bots`);
     showResponse('addBotsResponse', data);
+    cachedBotList = null;
     loadStatus();
   } catch (e) {
     toast(e.message || 'Add bots failed', 'error');
@@ -1507,6 +1676,163 @@ async function updateConfig() {
     showResponse('cfgResponse', e.data || { error: e.message });
   } finally { setLoading('btnCfgUpdate', false); }
 }
+
+/* ────────────────────────────────────────────
+   Bot Balance Popover
+   ──────────────────────────────────────────── */
+function openBotPopover(item) {
+  const overlay = document.getElementById('botPopoverOverlay');
+  document.getElementById('botPopoverTitle').textContent = `${item.botId || 'Bot'} Balances`;
+  const body = document.getElementById('botPopoverBody');
+  const tokens = item.tokens || {};
+  const entries = Object.entries(tokens);
+
+  let html = '<ul class="token-list">';
+  html += `<li class="token-item sol-row">
+    <span class="token-mint">SOL (native)</span>
+    <span class="token-amount" style="color:var(--yellow)">${fmtNumFull(item.sol)}</span>
+  </li>`;
+  if (entries.length > 0) {
+    entries.forEach(([mint, amount]) => {
+      const safeMint = mint.replace(/[<>"'&]/g, '');
+      html += `<li class="token-item token-row">
+        <span class="token-mint copy-addr" data-copy="${safeMint}" title="Click to copy">${shortAddr(mint)}</span>
+        <span class="token-amount" style="color:var(--purple)">${fmtNumFull(amount)}</span>
+      </li>`;
+    });
+  } else {
+    html += '<li class="token-empty">No token balances</li>';
+  }
+  html += '</ul>';
+
+  if (item.address) {
+    const safeAddr = item.address.replace(/[<>"'&]/g, '');
+    html += `<div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--border);font-size:11px;color:var(--text2)">
+      Address: <span class="copy-addr mono" data-copy="${safeAddr}" title="Click to copy">${item.address}</span>
+    </div>`;
+  }
+
+  body.innerHTML = html;
+  overlay.classList.add('active');
+}
+
+function closeBotPopover() {
+  const overlay = document.getElementById('botPopoverOverlay');
+  overlay.classList.add('closing');
+  setTimeout(() => { overlay.classList.remove('active', 'closing'); }, 150);
+}
+
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeBotPopover(); });
+
+/* ────────────────────────────────────────────
+   Entity Picker
+   ──────────────────────────────────────────── */
+// Map picker ID -> target input ID
+const pickerInputMap = {
+  fundBotPicker: 'fundBotIds',
+  marketPicker: 'marketIdsInput',
+  ignoredMarketPicker: 'ignoredMarketIds'
+};
+
+async function fetchBotList() {
+  if (cachedBotList) return cachedBotList;
+  try {
+    const data = await api('GET', '/admin/stats?page=1&page_size=200');
+    cachedBotList = (data.items || []).map(b => ({ id: b.botId, addr: b.address || '' }));
+    return cachedBotList;
+  } catch { return []; }
+}
+
+async function fetchMarketList() {
+  // No direct "list all markets" endpoint. Derive from stats trade data if available,
+  // or show a helpful message. Markets aren't individually exposed via API.
+  if (cachedMarketList) return cachedMarketList;
+  // Try to get market info from cached status response (ignoredMarketIds at least)
+  const ignored = cachedStatus?.runtime?.observability?.jobs || {};
+  // The backend doesn't expose market list. Return empty — the picker will show a hint.
+  cachedMarketList = [];
+  return cachedMarketList;
+}
+
+function togglePicker(pickerId, entityType) {
+  const dropdown = document.getElementById(pickerId);
+  // Close all other pickers
+  document.querySelectorAll('.picker-dropdown.active').forEach(d => {
+    if (d.id !== pickerId) d.classList.remove('active');
+  });
+  if (dropdown.classList.contains('active')) {
+    dropdown.classList.remove('active');
+    return;
+  }
+  populatePicker(pickerId, entityType);
+  dropdown.classList.add('active');
+}
+
+async function populatePicker(pickerId, entityType) {
+  const dropdown = document.getElementById(pickerId);
+  const inputId = pickerInputMap[pickerId];
+  const input = document.getElementById(inputId);
+  const currentValues = new Set(parseCSV(input.value));
+
+  if (entityType === 'bot') {
+    dropdown.innerHTML = '<div style="padding:12px;text-align:center;color:var(--text2);font-size:11px">Loading bots...</div>';
+    const bots = await fetchBotList();
+    if (bots.length === 0) {
+      dropdown.innerHTML = '<div style="padding:12px;text-align:center;color:var(--text2);font-size:11px">No bots found</div>';
+      return;
+    }
+    let html = '<div class="picker-search"><input placeholder="Search bots..." oninput="filterPicker(this)"></div>';
+    bots.forEach(bot => {
+      const sel = currentValues.has(bot.id) ? ' selected' : '';
+      html += `<div class="picker-item${sel}" data-entity-id="${bot.id}" onclick="pickEntity('${pickerId}','${bot.id}')">
+        <span><span class="picker-id">${bot.id}</span> <span class="picker-addr">${shortAddr(bot.addr)}</span></span>
+        <span class="picker-check">+</span>
+      </div>`;
+    });
+    dropdown.innerHTML = html;
+  } else {
+    // Market picker — no API to list markets, so show text input hint
+    dropdown.innerHTML = `<div style="padding:12px;text-align:center;color:var(--text2);font-size:11px;line-height:1.5">
+      No market listing endpoint available.<br>
+      Enter market IDs manually, or paste from<br>
+      the Dekant backend.
+    </div>`;
+  }
+}
+
+function filterPicker(searchInput) {
+  const term = searchInput.value.toLowerCase();
+  const items = searchInput.closest('.picker-dropdown').querySelectorAll('.picker-item');
+  items.forEach(item => {
+    const id = item.dataset.entityId.toLowerCase();
+    item.style.display = id.includes(term) ? '' : 'none';
+  });
+}
+
+function pickEntity(pickerId, entityId) {
+  const inputId = pickerInputMap[pickerId];
+  const input = document.getElementById(inputId);
+  const current = parseCSV(input.value);
+  const idx = current.indexOf(entityId);
+  if (idx >= 0) {
+    current.splice(idx, 1);
+  } else {
+    current.push(entityId);
+  }
+  input.value = current.join(', ');
+
+  // Toggle selected class on the item
+  const dropdown = document.getElementById(pickerId);
+  const item = dropdown.querySelector(`[data-entity-id="${entityId}"]`);
+  if (item) item.classList.toggle('selected');
+}
+
+// Close pickers on outside click
+document.addEventListener('click', e => {
+  if (!e.target.closest('.input-with-picker')) {
+    document.querySelectorAll('.picker-dropdown.active').forEach(d => d.classList.remove('active'));
+  }
+});
 
 /* ────────────────────────────────────────────
    Auto-Refresh
