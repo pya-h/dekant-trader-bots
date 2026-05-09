@@ -465,6 +465,8 @@
   .job-card h4 { font-size: 12px; font-weight: 600; margin-bottom: 8px; color: var(--accent); text-transform: capitalize; }
   .job-card .job-row { display: flex; justify-content: space-between; font-size: 11px; padding: 3px 0; }
   .job-card .job-row .jl { color: var(--text2); }
+  .job-card .job-row.error-clickable { cursor: pointer; border-radius: 4px; margin: 0 -4px; padding: 3px 4px; }
+  .job-card .job-row.error-clickable:hover { background: var(--red-bg); }
 
   /* Response viewer */
   .response-box {
@@ -558,6 +560,9 @@
   /* Stat box colored hover glow */
   .stat-box:has(.stat-value.green):hover { box-shadow: 0 8px 24px rgba(52,211,153,0.12), 0 0 0 1px rgba(52,211,153,0.08); }
   .stat-box:has(.stat-value.red):hover { box-shadow: 0 8px 24px rgba(248,113,113,0.12), 0 0 0 1px rgba(248,113,113,0.08); }
+  .stat-box.clickable, .mini-stat.clickable { cursor: pointer; }
+  .stat-box.clickable:hover { border-color: var(--red); }
+  .mini-stat.clickable:hover { background: var(--surface3); border-color: var(--red); }
   .stat-box:has(.stat-value.yellow):hover { box-shadow: 0 8px 24px rgba(251,191,36,0.12), 0 0 0 1px rgba(251,191,36,0.08); }
   .stat-box:has(.stat-value.accent):hover { box-shadow: 0 8px 24px rgba(79,143,247,0.12), 0 0 0 1px rgba(79,143,247,0.08); }
   .stat-box:has(.stat-value.purple):hover { box-shadow: 0 8px 24px rgba(167,139,250,0.12), 0 0 0 1px rgba(167,139,250,0.08); }
@@ -830,7 +835,7 @@
       <div class="stat-box"><div class="stat-value purple" id="sv-sells">--</div><div class="stat-label">Sell Trades</div></div>
       <div class="stat-box"><div class="stat-value green" id="sv-buyVol">--</div><div class="stat-label">Buy Volume</div></div>
       <div class="stat-box"><div class="stat-value purple" id="sv-sellVol">--</div><div class="stat-label">Sell Volume</div></div>
-      <div class="stat-box"><div class="stat-value red" id="sv-fails">--</div><div class="stat-label">Failed Actions</div></div>
+      <div class="stat-box clickable" onclick="openModal('tabObservability')" title="View error details"><div class="stat-value red" id="sv-fails">--</div><div class="stat-label">Failed Actions</div></div>
       <div class="stat-box"><div class="stat-value yellow" id="sv-uptime">--</div><div class="stat-label">Uptime</div></div>
       <div class="stat-box"><div class="stat-value" id="sv-lastTrade">--</div><div class="stat-label">Last Trade</div></div>
     </div>
@@ -866,7 +871,7 @@
       <div class="summary-stats" id="tradeStatsSummary">
         <div class="mini-stat"><div class="mini-val green" id="sum-totalTrades">--</div><div class="mini-label">Total Trades</div></div>
         <div class="mini-stat"><div class="mini-val" id="sum-totalVol">--</div><div class="mini-label">Total Volume</div></div>
-        <div class="mini-stat"><div class="mini-val red" id="sum-totalFails">--</div><div class="mini-label">Failed</div></div>
+        <div class="mini-stat clickable" onclick="openModal('tabObservability')" title="View error details"><div class="mini-val red" id="sum-totalFails">--</div><div class="mini-label">Failed</div></div>
       </div>
       <div class="summary-footer">
         <span class="summary-hint" id="statsSummaryHint">--</span>
@@ -1124,6 +1129,17 @@
       <button class="modal-close" onclick="closeBotPopover()">&times;</button>
     </div>
     <div class="popover-body" id="botPopoverBody"></div>
+  </div>
+</div>
+
+<!-- Error Detail Popover -->
+<div class="popover-overlay" id="errorPopoverOverlay" onclick="if(event.target===this)closeErrorPopover()">
+  <div class="popover" style="max-width:480px">
+    <div class="popover-header">
+      <h3 id="errorPopoverTitle">Error Details</h3>
+      <button class="modal-close" onclick="closeErrorPopover()">&times;</button>
+    </div>
+    <div class="popover-body" id="errorPopoverBody"></div>
   </div>
 </div>
 
@@ -1458,10 +1474,58 @@ function renderObservability() {
       <div class="job-row"><span class="jl">Last Start</span><span>${fmtTime(j.lastStartedAt)}</span></div>
       <div class="job-row"><span class="jl">Last Success</span><span>${fmtTime(j.lastSuccessAt)}</span></div>
       <div class="job-row"><span class="jl">Last Failure</span><span>${fmtTime(j.lastFailureAt)}</span></div>
-      ${j.lastErrorType ? `<div class="divider"></div><div class="job-row"><span class="jl">Error</span><span style="color:var(--red);font-size:10px;max-width:160px;text-align:right">${j.lastErrorType}: ${j.lastErrorMessage || ''}</span></div>` : ''}
+      ${j.lastErrorType ? `<div class="divider"></div><div class="job-row error-clickable" onclick="openJobErrorPopover('${name}')" title="Click for details"><span class="jl">Error ▸</span><span style="color:var(--red);font-size:10px;max-width:160px;text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${j.lastErrorType}: ${j.lastErrorMessage || ''}</span></div>` : ''}
     </div>
   `).join('');
 }
+
+/* ────────────────────────────────────────────
+   Error Detail Popover
+   ──────────────────────────────────────────── */
+function openJobErrorPopover(jobName) {
+  const obs = cachedStatus?.runtime?.observability || {};
+  const j = (obs.jobs || {})[jobName];
+  if (!j || !j.lastErrorType) return;
+
+  const label = jobName.replace(/_/g, ' ');
+  document.getElementById('errorPopoverTitle').textContent = label + ' — Last Error';
+
+  const rows = [
+    { label: 'Error Type', value: j.lastErrorType, color: 'var(--red)' },
+    { label: 'Message', value: j.lastErrorMessage || '—', color: 'var(--red)', mono: true },
+    { label: 'Last Failure', value: fmtTime(j.lastFailureAt) },
+    { label: 'Total Failures', value: String(j.failures || 0), color: j.failures ? 'var(--red)' : null },
+    { label: 'Action Failures', value: String(j.actionFailures || 0), color: j.actionFailures ? 'var(--red)' : null }
+  ];
+
+  document.getElementById('errorPopoverBody').innerHTML = `
+    <div style="display:flex;flex-direction:column;gap:8px">
+      ${rows.map(r => `
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;font-size:12px">
+          <span style="color:var(--text2);flex-shrink:0">${r.label}</span>
+          <span style="color:${r.color || 'var(--text)'};text-align:right;word-break:break-all;${r.mono ? 'font-family:JetBrains Mono,monospace;font-size:11px;' : ''}">${r.value}</span>
+        </div>
+      `).join('')}
+    </div>
+    <div style="margin-top:14px;padding-top:10px;border-top:1px solid var(--border);font-size:10px;color:var(--text2)">
+      Note: Only the last error per job is stored. Full error logs are not persisted by the API.
+    </div>
+  `;
+
+  document.getElementById('errorPopoverOverlay').classList.add('active');
+}
+
+function closeErrorPopover() {
+  const overlay = document.getElementById('errorPopoverOverlay');
+  overlay.classList.add('closing');
+  setTimeout(() => overlay.classList.remove('active', 'closing'), 150);
+}
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && document.getElementById('errorPopoverOverlay').classList.contains('active')) {
+    closeErrorPopover();
+  }
+});
 
 /* ────────────────────────────────────────────
    Pagination Helper
