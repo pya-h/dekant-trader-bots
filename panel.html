@@ -1150,7 +1150,7 @@
    Helpers
    ──────────────────────────────────────────── */
 
-const ADMIN_SECRET = 'SECRET_KEY_H';
+const ADMIN_SECRET = 'OPERATOR_SECRET';
 
 function getBase() { return window.location.origin; }
 function getSecret() { return ADMIN_SECRET; }
@@ -1216,7 +1216,18 @@ document.addEventListener('click', e => {
 function fmtTime(iso) {
   if (!iso) return '--';
   const d = new Date(iso);
-  return d.toLocaleTimeString();
+  const now = new Date();
+  const time = d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
+  if (d.toDateString() === now.toDateString()) return time;
+
+  const yesterday = new Date(now);
+  yesterday.setDate(yesterday.getDate() - 1);
+  if (d.toDateString() === yesterday.toDateString()) return 'Yesterday ' + time;
+
+  const calendarDays = Math.floor((new Date(now.getFullYear(), now.getMonth(), now.getDate()) - new Date(d.getFullYear(), d.getMonth(), d.getDate())) / 86400000);
+  if (calendarDays < 7) return calendarDays + 'd ago ' + time;
+  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) + ' ' + time;
 }
 
 function fmtUptime(ms) {
