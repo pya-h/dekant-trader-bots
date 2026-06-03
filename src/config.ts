@@ -24,7 +24,7 @@ const envSchema = z.object({
   DEKANT_BACKEND_URL: z.string().url(),
   PRICESERVICE_URL: z.string().url(),
   SOLANA_RPC_URL: z.string().url(),
-  DEKANT_PROGRAM_ID: z.string().min(32).optional(),
+  PROGRAM_ID: z.string().min(32).optional(),
   VAULT_SECRET_KEY: z.string().min(1),
   BOT_COUNTS: z.coerce.number().int().positive().default(5),
   MARKET_REFRESH_INTERVAL_MS: z.coerce.number().int().positive().default(3_600_000),
@@ -145,10 +145,10 @@ function parseMintList(raw: string): string[] {
 export function loadEnvConfig(env: NodeJS.ProcessEnv = process.env): EnvConfig {
   const parsed = envSchema.parse(env);
 
-  const dekantProgramId = parsed.DEKANT_PROGRAM_ID ?? IDL_PROGRAM_ID;
+  const dekantProgramId = parsed.PROGRAM_ID ?? IDL_PROGRAM_ID;
   if (!dekantProgramId) {
     throw new Error(
-      "DEKANT_PROGRAM_ID is not set and IDL has no address — cannot resolve program id"
+      "PROGRAM_ID is not set and IDL has no address — cannot resolve program id"
     );
   }
 
