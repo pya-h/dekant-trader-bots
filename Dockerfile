@@ -10,6 +10,7 @@ RUN npm ci
 
 COPY tsconfig.json tsconfig.build.json ./
 COPY src ./src
+COPY scripts ./scripts
 
 RUN npm run build && npm prune --omit=dev
 
@@ -20,9 +21,12 @@ ENV NODE_ENV=production
 RUN apk add --no-cache ca-certificates tzdata curl wget tini \
   && chown -R node:node /app
 
-COPY --from=builder /app/package.json /app/package-lock.json ./
-COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/dist ./dist
+# --chown so the `node` user can rewrite dist/.../dekant_pm.json at startup
+# (program-sync runs as `node`); the embedded HEALTHCHECK only reads.
+COPY --chown=node:node --from=builder /app/package.json /app/package-lock.json ./
+COPY --chown=node:node --from=builder /app/node_modules ./node_modules
+COPY --chown=node:node --from=builder /app/dist ./dist
+COPY --chown=node:node --from=builder /app/scripts ./scripts
 
 USER node
 EXPOSE 3000
@@ -30,4 +34,7 @@ EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
   CMD wget -qO- "http://127.0.0.1:${PORT:-3000}/health" || exit 1
 
-ENTRYPOINT ["/sbin/tini", "--", "node", "dist/server.js"]
+# Sync the bundled IDL address to DEKANT_PROGRAM_ID (runtime env) before booting,
+# so one image serves both the staging and main devnet programs. exec hands PID
+# to node under tini for correct signal handling.
+ENTRYPOINT ["/sbin/tini", "--", "sh", "-c", "node scripts/program-sync.mjs && exec node dist/server.js"]
