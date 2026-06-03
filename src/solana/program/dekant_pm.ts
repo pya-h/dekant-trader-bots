@@ -1923,6 +1923,171 @@ export type DekantPm = {
       ]
     },
     {
+      "name": "sellAll",
+      "docs": [
+        "Sell the trader's entire position in a continuous market.",
+        "Reads holdings directly from the position account — no distribution fitting needed."
+      ],
+      "discriminator": [
+        100,
+        215,
+        153,
+        65,
+        230,
+        47,
+        248,
+        97
+      ],
+      "accounts": [
+        {
+          "name": "trader",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "market",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  97,
+                  114,
+                  107,
+                  101,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market.market_id",
+                "account": "market"
+              }
+            ]
+          },
+          "relations": [
+            "userPosition"
+          ]
+        },
+        {
+          "name": "protocolConfig",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  116,
+                  111,
+                  99,
+                  111,
+                  108,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "userPosition",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  117,
+                  115,
+                  101,
+                  114,
+                  95,
+                  112,
+                  111,
+                  115,
+                  105,
+                  116,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market"
+              },
+              {
+                "kind": "account",
+                "path": "trader"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vaultAuthority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault",
+          "writable": true
+        },
+        {
+          "name": "traderAta",
+          "writable": true
+        },
+        {
+          "name": "tokenProgram",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        }
+      ],
+      "args": [
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "sellAllArgs"
+            }
+          }
+        }
+      ]
+    },
+    {
       "name": "sellDistribution",
       "docs": [
         "Sell across bins proportional to a Normal(mu, sigma) distribution."
@@ -2701,111 +2866,116 @@ export type DekantPm = {
     },
     {
       "code": 6017,
+      "name": "invalidKernelWidth",
+      "msg": "kernel_width must be < num_outcomes for continuous markets, and 0 for binary/multi"
+    },
+    {
+      "code": 6018,
       "name": "insufficientBalance",
       "msg": "Insufficient collateral balance"
     },
     {
-      "code": 6018,
+      "code": 6019,
       "name": "insufficientLiquidity",
       "msg": "Insufficient liquidity in the AMM"
     },
     {
-      "code": 6019,
+      "code": 6020,
       "name": "insufficientHoldings",
       "msg": "Insufficient token holdings to sell"
     },
     {
-      "code": 6020,
+      "code": 6021,
       "name": "tradeTooSmall",
       "msg": "Trade amount is below the minimum"
     },
     {
-      "code": 6021,
+      "code": 6022,
       "name": "invalidSigma",
       "msg": "Sigma must be greater than zero"
     },
     {
-      "code": 6022,
+      "code": 6023,
       "name": "wrongMarketType",
       "msg": "This instruction is not valid for this market type"
     },
     {
-      "code": 6023,
+      "code": 6024,
       "name": "invalidProbability",
       "msg": "Target probability out of valid range"
     },
     {
-      "code": 6024,
+      "code": 6025,
       "name": "targetAlreadyMet",
       "msg": "Target probability is already met or on the wrong side of current price"
     },
     {
-      "code": 6025,
+      "code": 6026,
       "name": "maxCollateralExceeded",
       "msg": "Required collateral exceeds max_collateral"
     },
     {
-      "code": 6026,
+      "code": 6027,
       "name": "minCollateralNotMet",
       "msg": "Returned collateral is below min_collateral_out"
     },
     {
-      "code": 6027,
+      "code": 6028,
       "name": "alreadyClaimed",
       "msg": "Payout has already been claimed"
     },
     {
-      "code": 6028,
+      "code": 6029,
       "name": "nothingToClaim",
       "msg": "No winning tokens held; nothing to claim"
     },
     {
-      "code": 6029,
+      "code": 6030,
       "name": "invariantViolation",
       "msg": "L2-norm invariant violated after operation"
     },
     {
-      "code": 6030,
+      "code": 6031,
       "name": "mathOverflow",
       "msg": "Arithmetic overflow"
     },
     {
-      "code": 6031,
+      "code": 6032,
       "name": "divisionByZero",
       "msg": "Division by zero"
     },
     {
-      "code": 6032,
+      "code": 6033,
       "name": "sqrtFailed",
       "msg": "Square root computation failed"
     },
     {
-      "code": 6033,
+      "code": 6034,
       "name": "feeTooHigh",
       "msg": "Fee exceeds the maximum allowed basis points"
     },
     {
-      "code": 6034,
+      "code": 6035,
       "name": "noFeesToCollect",
       "msg": "No protocol fees to collect"
     },
     {
-      "code": 6035,
+      "code": 6036,
       "name": "insufficientShares",
       "msg": "Cannot remove more LP shares than held"
     },
     {
-      "code": 6036,
+      "code": 6037,
       "name": "liquidityTooSmall",
       "msg": "Liquidity amount is below the minimum"
     },
     {
-      "code": 6037,
+      "code": 6038,
       "name": "resolvedValueOutOfRange",
       "msg": "Resolved value is outside the market range"
     },
     {
-      "code": 6038,
+      "code": 6039,
       "name": "wrongOracle",
       "msg": "Signer is not the assigned oracle for this market"
     }
@@ -2974,6 +3144,16 @@ export type DekantPm = {
               "Upper bound of continuous range (scaled 10^9). 0 for discrete."
             ],
             "type": "i64"
+          },
+          {
+            "name": "kernelWidth",
+            "docs": [
+              "Smooth settlement kernel width for continuous markets — number of bins",
+              "on each side of the winning bin that receive partial payouts.",
+              "0 = winner-take-all (default). Ignored (forced to 0) for binary/multi.",
+              "Must be < num_outcomes for continuous markets."
+            ],
+            "type": "u16"
           }
         ]
       }
@@ -3320,6 +3500,27 @@ export type DekantPm = {
             "type": "u8"
           },
           {
+            "name": "kernelWidth",
+            "docs": [
+              "Smooth settlement kernel width (bins on each side of winner).",
+              "0 = winner-take-all (default, backward-compatible — matches existing",
+              "markets whose padding deserializes as zero). Only meaningful for",
+              "continuous markets; binary/multi force this to 0 at initialization."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "scalingFactor",
+            "docs": [
+              "Solvency scaling factor for kernel resolution (SCALE-denominated).",
+              "0 until the market is resolved; SCALE (10^9) once resolved when no",
+              "dilution is needed; < SCALE when raw kernel claims would exceed",
+              "`total_minted` (proportionally dilutes each claimant). Only meaningful",
+              "for continuous markets with `kernel_width > 0`."
+            ],
+            "type": "u64"
+          },
+          {
             "name": "padding",
             "docs": [
               "Reserved for future schema versions. Consumed from the front",
@@ -3329,7 +3530,7 @@ export type DekantPm = {
             "type": {
               "array": [
                 "u8",
-                30
+                20
               ]
             }
           },
@@ -3689,6 +3890,22 @@ export type DekantPm = {
           {
             "name": "timestamp",
             "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "sellAllArgs",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "minCollateralOut",
+            "docs": [
+              "Minimum collateral the trader expects to receive (slippage protection).",
+              "Set to 0 to accept any amount."
+            ],
+            "type": "u64"
           }
         ]
       }

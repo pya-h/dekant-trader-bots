@@ -7,3 +7,6 @@ coverage/
 docs
 
 !.env.example
+panel.html
+panel-server.mjs
+.claude

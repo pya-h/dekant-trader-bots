@@ -57,6 +57,12 @@ export type TradeImpactSummary = {
   delta: { totalMinted: string; kSquared: string; lpSharesTotal: string };
   before: { totalMinted: string; kSquared: string; lpSharesTotal: string };
   after: { totalMinted: string; kSquared: string; lpSharesTotal: string };
+  /** mu actually submitted (scaled i64) after clamping into the market range. */
+  muApplied: string;
+  /** Spot-derived mu (scaled i64) before clamping. */
+  muRequested: string;
+  /** True when the requested mu was outside [rangeMin, rangeMax] and clamped. */
+  muClamped: boolean;
 };
 
 export type SubmitTradeResult = {

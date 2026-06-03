@@ -158,15 +158,37 @@ function scaleBigInt(value: number, label: string): bigint {
   return sign * (whole * SCALE + frac);
 }
 
-function scaleMu(value: number, rangeMin: BN, rangeMax: BN): BN {
-  const scaled = scaleBigInt(value, "mu");
-  const bn = new BN(scaled.toString());
-  if (bn.lt(rangeMin) || bn.gt(rangeMax)) {
-    throw new OutOfRangeError(
-      `mu_outside_market_range:${value}:[${rangeMin.toString()},${rangeMax.toString()}]`
-    );
+export type MuResolution = {
+  /** On-chain mu actually submitted (scaled i64), clamped into the market range. */
+  mu: BN;
+  /** Spot-derived center scaled to i64, before clamping. */
+  requested: BN;
+  /** True when `requested` fell outside [rangeMin, rangeMax] and was clamped. */
+  clamped: boolean;
+};
+
+/**
+ * Scale a human-unit center into the on-chain i64 fixed-point space and clamp
+ * it into the market's valid [rangeMin, rangeMax] band.
+ *
+ * The bot derives `mu` from the external spot price, which can legitimately sit
+ * outside a market's configured range (e.g. spot just below rangeMin). Rather
+ * than rejecting the trade outright — which previously failed every buy with
+ * `mu_outside_market_range` — we clamp to the nearest in-range bound so the bot
+ * still nudges the curve toward the closest logical value. `clamped` is surfaced
+ * (via TradeImpact) so callers can flag markets whose spot price is persistently
+ * out of range, which usually signals a price/range unit mismatch in the market
+ * definition itself.
+ */
+export function clampMu(value: number, rangeMin: BN, rangeMax: BN): MuResolution {
+  const requested = new BN(scaleBigInt(value, "mu").toString());
+  if (requested.lt(rangeMin)) {
+    return { mu: rangeMin, requested, clamped: true };
   }
-  return bn;
+  if (requested.gt(rangeMax)) {
+    return { mu: rangeMax, requested, clamped: true };
+  }
+  return { mu: requested, requested, clamped: false };
 }
 
 function scaleSigma(value: number): BN {
@@ -228,6 +250,12 @@ export type TradeImpact = {
   effectivePrice: number | null;
   /** k_squared post / pre — scalar curvature change. */
   kSquaredRatio: number | null;
+  /** mu actually submitted (scaled i64), after range clamping. */
+  muApplied: string;
+  /** Spot-derived mu (scaled i64) before clamping. */
+  muRequested: string;
+  /** True when the requested mu was outside [rangeMin, rangeMax] and clamped. */
+  muClamped: boolean;
 };
 
 function snapshot(account: { totalMinted: BN; kSquared: BN; lpSharesTotal: BN }) {
@@ -244,6 +272,9 @@ function computeImpact(args: {
   decimals: number;
   rangeMin: BN;
   rangeMax: BN;
+  muApplied: BN;
+  muRequested: BN;
+  muClamped: boolean;
   /** Collateral paid (buy) — omit for sells where collateral received isn't known here. */
   collateralBaseUnits?: string;
 }): TradeImpact {
@@ -280,7 +311,10 @@ function computeImpact(args: {
     },
     tokensTransacted,
     effectivePrice,
-    kSquaredRatio
+    kSquaredRatio,
+    muApplied: args.muApplied.toString(),
+    muRequested: args.muRequested.toString(),
+    muClamped: args.muClamped
   };
 }
 
@@ -361,9 +395,10 @@ export async function executeBuyDistribution(
   const { accounts, marketAccount, collateralMint, traderAta, decimals, rangeMin, rangeMax } =
     await resolveAccounts(program, programId, marketPubkey, trader, resolveDecimals);
   const collateralBaseUnits = toBaseUnitsBN(amount, decimals);
+  const muResolution = clampMu(mu, rangeMin, rangeMax);
   const builder = program.methods
     .buyDistribution({
-      mu: scaleMu(mu, rangeMin, rangeMax),
+      mu: muResolution.mu,
       sigma: scaleSigma(sigma),
       collateralAmount: collateralBaseUnits
     })
@@ -388,6 +423,9 @@ export async function executeBuyDistribution(
         decimals,
         rangeMin,
         rangeMax,
+        muApplied: muResolution.mu,
+        muRequested: muResolution.requested,
+        muClamped: muResolution.clamped,
         collateralBaseUnits: collateralBaseUnits.toString()
       })
     : undefined;
@@ -407,9 +445,10 @@ export async function executeSellDistribution(
   const { accounts, marketAccount, collateralMint, traderAta, decimals, rangeMin, rangeMax } =
     await resolveAccounts(program, programId, marketPubkey, trader, resolveDecimals);
   const tokenAmountBaseUnits = toBaseUnitsBN(tokenAmount, decimals);
+  const muResolution = clampMu(mu, rangeMin, rangeMax);
   const builder = program.methods
     .sellDistribution({
-      mu: scaleMu(mu, rangeMin, rangeMax),
+      mu: muResolution.mu,
       sigma: scaleSigma(sigma),
       tokenAmount: tokenAmountBaseUnits
     })
@@ -428,7 +467,16 @@ export async function executeSellDistribution(
   const txId = await builder.rpc({ skipPreflight: false, maxRetries: 3, commitment: "confirmed" });
   const after = await fetchSnapshotSafe(program, marketPubkey);
   const impact = after
-    ? computeImpact({ before, after, decimals, rangeMin, rangeMax })
+    ? computeImpact({
+        before,
+        after,
+        decimals,
+        rangeMin,
+        rangeMax,
+        muApplied: muResolution.mu,
+        muRequested: muResolution.requested,
+        muClamped: muResolution.clamped
+      })
     : undefined;
   return { txId, impact };
 }

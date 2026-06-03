@@ -481,7 +481,8 @@ export async function createInitializedApp(
           tokensReceived: action.impact?.tokensTransacted,
           effectivePrice: action.impact?.effectivePrice,
           kSquaredRatio: action.impact?.kSquaredRatio,
-          curveDelta: action.impact?.delta
+          curveDelta: action.impact?.delta,
+          muClamped: action.impact?.muClamped
         });
       }
       for (const market of Object.values(buyByMarket)) {
@@ -577,7 +578,8 @@ export async function createInitializedApp(
           txId: action.txId,
           tokensBurned: action.impact?.tokensTransacted,
           kSquaredRatio: action.impact?.kSquaredRatio,
-          curveDelta: action.impact?.delta
+          curveDelta: action.impact?.delta,
+          muClamped: action.impact?.muClamped
         });
       }
       for (const market of Object.values(sellByMarket)) {

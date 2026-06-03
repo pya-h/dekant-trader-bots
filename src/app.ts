@@ -149,13 +149,17 @@ export function buildApp(
 
     app.setErrorHandler((error, request, reply) => {
       const requestId = request.id;
+      // Log the status code we are about to send, not reply.statusCode — at this
+      // point the latter is still the pre-throw value (usually 200) and is set to
+      // the real code only by the reply.code(...) calls below.
+      const statusCode = error instanceof z.ZodError ? 400 : 500;
       logger.error("http_unhandled_error", {
         requestId,
         method: request.method,
         url: request.url,
         message: error instanceof Error ? error.message : String(error),
         stack: error instanceof Error ? error.stack : undefined,
-        statusCode: reply.statusCode
+        statusCode
       });
       // ZodError → 400 with field paths only (no values).
       if (error instanceof z.ZodError) {
