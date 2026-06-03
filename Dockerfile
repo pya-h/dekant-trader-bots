@@ -37,4 +37,6 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
 # Sync the bundled IDL address to DEKANT_PROGRAM_ID (runtime env) before booting,
 # so one image serves both the staging and main devnet programs. exec hands PID
 # to node under tini for correct signal handling.
-ENTRYPOINT ["/sbin/tini", "--", "sh", "-c", "node scripts/program-sync.mjs && exec node dist/server.js"]
+# ENTRYPOINT ["/sbin/tini", "--", "sh", "-c", "node scripts/program-sync.mjs && exec node dist/server.js"]
+ENTRYPOINT ["/sbin/tini", "--", "node", "dist/server.js"]
+
