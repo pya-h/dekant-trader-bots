@@ -199,6 +199,58 @@ function scaleSigma(value: number): BN {
   return new BN(scaled.toString());
 }
 
+/** On-chain Gaussian tail cutoff (constants.rs `Z_CUTOFF`): bins with |z| > 5 get weight 0. */
+const SIGMA_BIN_COVERAGE_Z = 5;
+
+export type SigmaResolution = {
+  /** On-chain sigma actually submitted (scaled i64), floored to keep ≥1 bin in range. */
+  sigma: BN;
+  /** Spot-derived spread scaled to i64, before flooring. */
+  requested: BN;
+  /** True when `requested` was below the bin-coverage floor and was bumped up. */
+  floored: boolean;
+};
+
+/**
+ * Scale a human-unit spread into the on-chain i64 fixed-point space and floor it
+ * so the Gaussian covers at least one bin of the market.
+ *
+ * On-chain (`normal_pdf::compute_bin_weights`), a bin gets weight 0 when its
+ * center is farther than `Z_CUTOFF * sigma` (= 5·sigma) from `mu`. Bin centers
+ * are spaced `span / num_outcomes` apart, so the worst-case distance from any
+ * in-range mu to the nearest bin center is half a bin width, `span / (2·n)`.
+ * When `5·sigma` is below that, EVERY bin is cut off → all weights are zero →
+ * the program aborts the buy/sell with `DivisionByZero(6032)` (amm.rs:208, the
+ * `require!(w2 > 0)` guard, since w2 = Σ weight²).
+ *
+ * The bot derives `sigma` from the external spot price with no knowledge of the
+ * market's range or bin count, so a market whose range is wide relative to spot
+ * (a units mismatch, same class as the mu-clamp case) yields a spread too small
+ * to land in any bin. We floor sigma to `span / (2·n·Z_CUTOFF)` — the minimum
+ * that guarantees coverage for any in-range mu — and surface `floored` so callers
+ * can flag the underlying market-definition issue. In normal operation sigma is
+ * far above this floor and the value passes through untouched.
+ */
+export function resolveSigma(
+  value: number,
+  rangeMin: BN,
+  rangeMax: BN,
+  numOutcomes: number
+): SigmaResolution {
+  const requested = scaleSigma(value);
+  const span = rangeMax.sub(rangeMin);
+  if (numOutcomes <= 0 || span.lten(0)) {
+    return { sigma: requested, requested, floored: false };
+  }
+  // ceil(span / (2 · numOutcomes · Z_CUTOFF)); always ≥ 1 since span > 0.
+  const denom = new BN(2 * SIGMA_BIN_COVERAGE_Z * numOutcomes);
+  const minSigma = span.add(denom).subn(1).div(denom);
+  if (requested.lt(minSigma)) {
+    return { sigma: minSigma, requested, floored: true };
+  }
+  return { sigma: requested, requested, floored: false };
+}
+
 export type DecimalsResolver = (mint: string) => Promise<number>;
 
 async function resolveAccounts(
@@ -232,7 +284,8 @@ async function resolveAccounts(
     traderAta,
     decimals,
     rangeMin: marketAccount.rangeMin as BN,
-    rangeMax: marketAccount.rangeMax as BN
+    rangeMax: marketAccount.rangeMax as BN,
+    numOutcomes: Number(marketAccount.numOutcomes as number)
   };
 }
 
@@ -256,6 +309,12 @@ export type TradeImpact = {
   muRequested: string;
   /** True when the requested mu was outside [rangeMin, rangeMax] and clamped. */
   muClamped: boolean;
+  /** sigma actually submitted (scaled i64), after the bin-coverage floor. */
+  sigmaApplied: string;
+  /** Spot-derived sigma (scaled i64) before flooring. */
+  sigmaRequested: string;
+  /** True when the requested sigma was below the bin-coverage floor and bumped up. */
+  sigmaFloored: boolean;
 };
 
 function snapshot(account: { totalMinted: BN; kSquared: BN; lpSharesTotal: BN }) {
@@ -275,6 +334,9 @@ function computeImpact(args: {
   muApplied: BN;
   muRequested: BN;
   muClamped: boolean;
+  sigmaApplied: BN;
+  sigmaRequested: BN;
+  sigmaFloored: boolean;
   /** Collateral paid (buy) — omit for sells where collateral received isn't known here. */
   collateralBaseUnits?: string;
 }): TradeImpact {
@@ -314,7 +376,10 @@ function computeImpact(args: {
     kSquaredRatio,
     muApplied: args.muApplied.toString(),
     muRequested: args.muRequested.toString(),
-    muClamped: args.muClamped
+    muClamped: args.muClamped,
+    sigmaApplied: args.sigmaApplied.toString(),
+    sigmaRequested: args.sigmaRequested.toString(),
+    sigmaFloored: args.sigmaFloored
   };
 }
 
@@ -392,14 +457,23 @@ export async function executeBuyDistribution(
   amount: string,
   resolveDecimals: DecimalsResolver
 ): Promise<TradeResult> {
-  const { accounts, marketAccount, collateralMint, traderAta, decimals, rangeMin, rangeMax } =
-    await resolveAccounts(program, programId, marketPubkey, trader, resolveDecimals);
+  const {
+    accounts,
+    marketAccount,
+    collateralMint,
+    traderAta,
+    decimals,
+    rangeMin,
+    rangeMax,
+    numOutcomes
+  } = await resolveAccounts(program, programId, marketPubkey, trader, resolveDecimals);
   const collateralBaseUnits = toBaseUnitsBN(amount, decimals);
   const muResolution = clampMu(mu, rangeMin, rangeMax);
+  const sigmaResolution = resolveSigma(sigma, rangeMin, rangeMax, numOutcomes);
   const builder = program.methods
     .buyDistribution({
       mu: muResolution.mu,
-      sigma: scaleSigma(sigma),
+      sigma: sigmaResolution.sigma,
       collateralAmount: collateralBaseUnits
     })
     .accountsPartial({ ...accounts, systemProgram: SystemProgram.programId })
@@ -426,6 +500,9 @@ export async function executeBuyDistribution(
         muApplied: muResolution.mu,
         muRequested: muResolution.requested,
         muClamped: muResolution.clamped,
+        sigmaApplied: sigmaResolution.sigma,
+        sigmaRequested: sigmaResolution.requested,
+        sigmaFloored: sigmaResolution.floored,
         collateralBaseUnits: collateralBaseUnits.toString()
       })
     : undefined;
@@ -442,14 +519,23 @@ export async function executeSellDistribution(
   tokenAmount: string,
   resolveDecimals: DecimalsResolver
 ): Promise<TradeResult> {
-  const { accounts, marketAccount, collateralMint, traderAta, decimals, rangeMin, rangeMax } =
-    await resolveAccounts(program, programId, marketPubkey, trader, resolveDecimals);
+  const {
+    accounts,
+    marketAccount,
+    collateralMint,
+    traderAta,
+    decimals,
+    rangeMin,
+    rangeMax,
+    numOutcomes
+  } = await resolveAccounts(program, programId, marketPubkey, trader, resolveDecimals);
   const tokenAmountBaseUnits = toBaseUnitsBN(tokenAmount, decimals);
   const muResolution = clampMu(mu, rangeMin, rangeMax);
+  const sigmaResolution = resolveSigma(sigma, rangeMin, rangeMax, numOutcomes);
   const builder = program.methods
     .sellDistribution({
       mu: muResolution.mu,
-      sigma: scaleSigma(sigma),
+      sigma: sigmaResolution.sigma,
       tokenAmount: tokenAmountBaseUnits
     })
     .accountsPartial(accounts)
@@ -475,7 +561,10 @@ export async function executeSellDistribution(
         rangeMax,
         muApplied: muResolution.mu,
         muRequested: muResolution.requested,
-        muClamped: muResolution.clamped
+        muClamped: muResolution.clamped,
+        sigmaApplied: sigmaResolution.sigma,
+        sigmaRequested: sigmaResolution.requested,
+        sigmaFloored: sigmaResolution.floored
       })
     : undefined;
   return { txId, impact };

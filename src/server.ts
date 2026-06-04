@@ -482,7 +482,8 @@ export async function createInitializedApp(
           effectivePrice: action.impact?.effectivePrice,
           kSquaredRatio: action.impact?.kSquaredRatio,
           curveDelta: action.impact?.delta,
-          muClamped: action.impact?.muClamped
+          muClamped: action.impact?.muClamped,
+          sigmaFloored: action.impact?.sigmaFloored
         });
       }
       for (const market of Object.values(buyByMarket)) {
@@ -579,7 +580,8 @@ export async function createInitializedApp(
           tokensBurned: action.impact?.tokensTransacted,
           kSquaredRatio: action.impact?.kSquaredRatio,
           curveDelta: action.impact?.delta,
-          muClamped: action.impact?.muClamped
+          muClamped: action.impact?.muClamped,
+          sigmaFloored: action.impact?.sigmaFloored
         });
       }
       for (const market of Object.values(sellByMarket)) {

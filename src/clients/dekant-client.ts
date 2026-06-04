@@ -63,6 +63,12 @@ export type TradeImpactSummary = {
   muRequested: string;
   /** True when the requested mu was outside [rangeMin, rangeMax] and clamped. */
   muClamped: boolean;
+  /** sigma actually submitted (scaled i64), after the bin-coverage floor. */
+  sigmaApplied: string;
+  /** Spot-derived sigma (scaled i64) before flooring. */
+  sigmaRequested: string;
+  /** True when the requested sigma was below the bin-coverage floor and bumped up. */
+  sigmaFloored: boolean;
 };
 
 export type SubmitTradeResult = {
