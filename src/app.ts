@@ -5,6 +5,7 @@ import { parsePaginationQuery } from "./api/pagination.js";
 import { AppConfig } from "./config.js";
 import type { BotKeyExport } from "./security/key-export.js";
 import type { StructuredLogger } from "./observability/logger.js";
+import type { EventLogSnapshot } from "./observability/event-log.js";
 
 type ClaimStatusSnapshot = {
   enabled: boolean;
@@ -33,6 +34,14 @@ type StatusRuntimeSnapshot = {
     funding?: { emergencyTopupCooldownMs?: number; minBotSol?: number; vaultSupportedMints?: string[] };
     price?: { stalePricePolicy?: string };
     ignoredMarketIds?: string[];
+  };
+  integration?: {
+    dekantBackendUrl?: string;
+    priceServiceUrl?: string;
+    solanaRpcUrl?: string;
+    dekantProgramId?: string;
+    idlProgramId?: string | null;
+    programIdSource?: string;
   };
   claim?: ClaimStatusSnapshot;
 };
@@ -73,6 +82,7 @@ type AdminHandlers = {
   removeIgnoredMarkets?: (input: { marketIds: string[] }) => Promise<unknown>;
   getBotBalances?: (input: { page: number; pageSize: number }) => Promise<BotBalancesPage>;
   getBotKeys?: () => Promise<BotKeyExport>;
+  getEvents?: (input: { limit?: number }) => EventLogSnapshot | Promise<EventLogSnapshot>;
   updateRuntimeConfig?: (input: RuntimeConfigPatch) => Promise<unknown>;
 };
 
@@ -413,6 +423,30 @@ export function buildApp(
         }
 
         const data = await adminHandlers.getBotKeys();
+        return {
+          status: "ok",
+          ...data
+        };
+      });
+
+      // Recent error/warning events tagged with bot, operation and time. In-memory
+      // ring buffer (resets on restart); the panel filters/sorts/groups client-side.
+      adminScope.get("/events", async (request, reply) => {
+        if (!adminHandlers.getEvents) {
+          return reply.code(503).send({ error: "events_unavailable" });
+        }
+
+        const rawLimit = (request.query as { limit?: unknown } | undefined)?.limit;
+        let limit: number | undefined;
+        if (typeof rawLimit === "string" && rawLimit.trim().length > 0) {
+          const parsedLimit = Number(rawLimit);
+          if (!Number.isInteger(parsedLimit) || parsedLimit <= 0) {
+            return reply.code(400).send({ error: "invalid_limit" });
+          }
+          limit = parsedLimit;
+        }
+
+        const data = await adminHandlers.getEvents({ limit });
         return {
           status: "ok",
           ...data

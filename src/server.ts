@@ -140,6 +140,10 @@ function normalizeMarketIds(ids: string[]): string[] {
   return unique(ids.map((id) => id.trim()).filter((id) => id.length > 0));
 }
 
+function asEventString(value: unknown): string | undefined {
+  return typeof value === "string" ? value : undefined;
+}
+
 function trackAndLogFailure(input: {
   monitor: RuntimeMonitor;
   logger: StructuredLogger;
@@ -148,7 +152,11 @@ function trackAndLogFailure(input: {
   event: string;
   context?: Record<string, unknown>;
 }) {
-  const classified = input.monitor.recordJobFailure(input.job, input.error);
+  const classified = input.monitor.recordJobFailure(input.job, input.error, {
+    event: input.event,
+    botId: asEventString(input.context?.botId),
+    marketId: asEventString(input.context?.marketId)
+  });
   input.logger.error(input.event, {
     job: input.job,
     errorType: classified.type,
@@ -170,7 +178,11 @@ function trackAndLogActionFailure(input: {
   event: string;
   context?: Record<string, unknown>;
 }) {
-  const classified = input.monitor.recordActionFailure(input.job, input.error);
+  const classified = input.monitor.recordActionFailure(input.job, input.error, {
+    event: input.event,
+    botId: asEventString(input.context?.botId),
+    marketId: asEventString(input.context?.marketId)
+  });
   input.logger.error(input.event, {
     job: input.job,
     errorType: classified.type,
@@ -727,12 +739,21 @@ export async function createInitializedApp(
             marketId: event.marketId,
             reason: event.error instanceof Error ? event.error.message : String(event.error)
           }),
-        onFailure: (event) =>
+        onFailure: (event) => {
+          const message = event.error instanceof Error ? event.error.message : String(event.error);
           safeWarn(logger, "claim_payout_failed", {
             botId: event.botId,
             marketId: event.marketId,
-            error: event.error instanceof Error ? event.error.message : String(event.error)
-          })
+            error: message
+          });
+          runtimeMonitor.recordWarning({
+            event: "claim_payout_failed",
+            job: "market_refresh",
+            botId: event.botId,
+            marketId: event.marketId,
+            message
+          });
+        }
       });
       lastClaimResult = result;
       lastClaimRunAt = now().toISOString();
@@ -741,8 +762,12 @@ export async function createInitializedApp(
       }
       return result;
     } catch (error) {
-      safeWarn(logger, "claim_pass_error", {
-        error: error instanceof Error ? error.message : String(error)
+      const message = error instanceof Error ? error.message : String(error);
+      safeWarn(logger, "claim_pass_error", { error: message });
+      runtimeMonitor.recordWarning({
+        event: "claim_pass_error",
+        job: "market_refresh",
+        message
       });
       return null;
     } finally {
@@ -1130,6 +1155,10 @@ export async function createInitializedApp(
       // every config field (not just buy/sell/max) and the supported-mint /
       // ignored-market lists. Read-only snapshot; mutate via PATCH /admin/config.
       config: state.runtimeConfig.config,
+      // Static integration targets the bot talks to (backend, price service, RPC)
+      // and the resolved vs. IDL program id — surfaced so the panel can show them
+      // and operators can spot a program/IDL mismatch. No secrets here.
+      integration: config.integration,
       observability: runtimeMonitor.getSnapshot(),
       claim: options.claim
         ? {
@@ -1202,6 +1231,7 @@ export async function createInitializedApp(
           })),
           config.botKeyGuard
         ),
+      getEvents: (input: { limit?: number }) => runtimeMonitor.getEventLog(input.limit),
       updateRuntimeConfig: async (patch: RuntimeConfigPatchInput) => updateRuntimeConfig(patch)
     },
     logger

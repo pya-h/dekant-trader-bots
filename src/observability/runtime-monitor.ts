@@ -1,4 +1,12 @@
 import { classifyError, ClassifiedError } from "./errors.js";
+import { EventLog, EventLogSnapshot } from "./event-log.js";
+
+/** Optional bot/operation context attached to a recorded failure or warning. */
+export type EventContext = {
+  event?: string;
+  botId?: string | null;
+  marketId?: string | null;
+};
 
 export type MonitoredJob =
   | "buy_cycle"
@@ -61,6 +69,7 @@ function makeEmptyCounters(): JobCounters {
 export class RuntimeMonitor {
   private readonly now: () => Date;
   private readonly startedAt: string;
+  private readonly eventLog: EventLog;
 
   private readonly jobs = new Map<MonitoredJob, JobCounters>();
   private totals: RuntimeMonitorSnapshot["totals"] = {
@@ -72,9 +81,10 @@ export class RuntimeMonitor {
     unknownErrors: 0
   };
 
-  constructor(options: { now?: () => Date } = {}) {
+  constructor(options: { now?: () => Date; eventLogCapacity?: number } = {}) {
     this.now = options.now ?? (() => new Date());
     this.startedAt = this.now().toISOString();
+    this.eventLog = new EventLog({ now: this.now, capacity: options.eventLogCapacity });
 
     for (const job of JOB_NAMES) {
       this.jobs.set(job, makeEmptyCounters());
@@ -117,7 +127,7 @@ export class RuntimeMonitor {
     this.totals.jobSuccesses += 1;
   }
 
-  recordJobFailure(job: MonitoredJob, error: unknown): ClassifiedError {
+  recordJobFailure(job: MonitoredJob, error: unknown, context?: EventContext): ClassifiedError {
     const classified = classifyError(error);
     const counters = this.getJob(job);
 
@@ -128,11 +138,12 @@ export class RuntimeMonitor {
 
     this.totals.jobFailures += 1;
     this.incrementErrorTotals(classified);
+    this.appendEvent("error", job, classified, context);
 
     return classified;
   }
 
-  recordActionFailure(job: MonitoredJob, error: unknown): ClassifiedError {
+  recordActionFailure(job: MonitoredJob, error: unknown, context?: EventContext): ClassifiedError {
     const classified = classifyError(error);
     const counters = this.getJob(job);
 
@@ -143,8 +154,54 @@ export class RuntimeMonitor {
 
     this.totals.actionFailures += 1;
     this.incrementErrorTotals(classified);
+    this.appendEvent("error", job, classified, context);
 
     return classified;
+  }
+
+  /**
+   * Record a warning into the event log. Warnings don't touch the job counters or
+   * health (they are not failures), they only add to the per-bot/per-operation trail
+   * the panel surfaces.
+   */
+  recordWarning(input: {
+    event: string;
+    message: string;
+    job?: MonitoredJob | null;
+    botId?: string | null;
+    marketId?: string | null;
+    errorType?: string | null;
+  }): void {
+    this.eventLog.record({
+      severity: "warn",
+      event: input.event,
+      job: input.job ?? null,
+      botId: input.botId ?? null,
+      marketId: input.marketId ?? null,
+      errorType: input.errorType ?? null,
+      message: input.message
+    });
+  }
+
+  private appendEvent(
+    severity: "error" | "warn",
+    job: MonitoredJob,
+    classified: ClassifiedError,
+    context?: EventContext
+  ): void {
+    this.eventLog.record({
+      severity,
+      event: context?.event ?? job,
+      job,
+      botId: context?.botId ?? null,
+      marketId: context?.marketId ?? null,
+      errorType: classified.type,
+      message: classified.message
+    });
+  }
+
+  getEventLog(limit?: number): EventLogSnapshot {
+    return this.eventLog.getSnapshot(limit);
   }
 
   getSnapshot(): RuntimeMonitorSnapshot {

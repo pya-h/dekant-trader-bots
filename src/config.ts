@@ -71,7 +71,12 @@ export type EnvConfig = {
     dekantBackendUrl: string;
     priceServiceUrl: string;
     solanaRpcUrl: string;
+    /** Program id the bot actually uses (PROGRAM_ID env override, else the IDL address). */
     dekantProgramId: string;
+    /** The address baked into the bundled IDL (may differ from the resolved one). */
+    idlProgramId: string | null;
+    /** Where dekantProgramId came from — useful for spotting an env/IDL mismatch. */
+    programIdSource: "env" | "idl";
   };
   vault: {
     secretKey: string;
@@ -127,6 +132,8 @@ export type AppConfig = {
     priceServiceUrl: string;
     solanaRpcUrl: string;
     dekantProgramId: string;
+    idlProgramId: string | null;
+    programIdSource: "env" | "idl";
   };
   vault: {
     secretKey: string;
@@ -175,7 +182,9 @@ export function loadEnvConfig(env: NodeJS.ProcessEnv = process.env): EnvConfig {
       dekantBackendUrl: parsed.DEKANT_BACKEND_URL,
       priceServiceUrl: parsed.PRICESERVICE_URL,
       solanaRpcUrl: parsed.SOLANA_RPC_URL,
-      dekantProgramId
+      dekantProgramId,
+      idlProgramId: IDL_PROGRAM_ID ?? null,
+      programIdSource: parsed.PROGRAM_ID ? "env" : "idl"
     },
     vault: {
       secretKey: parsed.VAULT_SECRET_KEY

@@ -11,7 +11,9 @@ export function createTestAppConfig(overrides: Partial<AppConfig> = {}): AppConf
       dekantBackendUrl: "https://backend.example.com",
       priceServiceUrl: "https://prices.example.com",
       solanaRpcUrl: "https://rpc.example.com",
-      dekantProgramId: "11111111111111111111111111111111"
+      dekantProgramId: "11111111111111111111111111111111",
+      idlProgramId: "11111111111111111111111111111111",
+      programIdSource: "idl"
     },
     vault: {
       secretKey: "vault-secret"
