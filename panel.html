@@ -1,0 +1,2957 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dekant Trader Bots — Admin Panel</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+  :root {
+    --bg: #060a10;
+    --surface: #0d1117;
+    --surface2: #151b25;
+    --surface3: #1c2333;
+    --border: #21283a;
+    --border-hover: #3a4560;
+    --text: #d1d5db;
+    --text2: #6b7a90;
+    --accent: #4f8ff7;
+    --accent2: #3a6fd8;
+    --accent-glow: rgba(79,143,247,0.15);
+    --green: #34d399;
+    --green2: #22b57a;
+    --green-bg: rgba(52,211,153,0.08);
+    --green-glow: rgba(52,211,153,0.12);
+    --red: #f87171;
+    --red-bg: rgba(248,113,113,0.08);
+    --red-glow: rgba(248,113,113,0.12);
+    --yellow: #fbbf24;
+    --yellow-bg: rgba(251,191,36,0.08);
+    --purple: #a78bfa;
+    --radius: 12px;
+    --radius-sm: 8px;
+    --shadow: 0 4px 24px rgba(0,0,0,0.4);
+    --shadow-lg: 0 12px 48px rgba(0,0,0,0.5);
+    --transition: 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.5;
+    min-height: 100vh;
+  }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 5px; height: 5px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--border-hover); }
+
+  /* Header */
+  .header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 16px 28px;
+    background: linear-gradient(180deg, var(--surface) 0%, var(--surface) 80%, transparent 100%);
+    border-bottom: 1px solid var(--border);
+    position: sticky; top: 0; z-index: 50;
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+  }
+  .header h1 { font-size: 17px; font-weight: 600; letter-spacing: -0.3px; display: flex; align-items: center; gap: 8px; }
+  .header h1 span { color: var(--accent); }
+  .header-right { display: flex; gap: 12px; align-items: center; }
+  .health-badge {
+    display: flex; align-items: center; gap: 6px;
+    padding: 5px 12px 5px 8px;
+    border-radius: 20px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    font-size: 11px; font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text2);
+    transition: all var(--transition);
+  }
+  .health-badge.ok { border-color: var(--green); color: var(--green); background: var(--green-bg); }
+  .health-badge.degraded { border-color: var(--yellow); color: var(--yellow); background: var(--yellow-bg); }
+  .health-badge.error { border-color: var(--red); color: var(--red); background: var(--red-bg); }
+  .health-dot {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: currentColor;
+    animation: pulse 2s ease-in-out infinite;
+    flex-shrink: 0;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; box-shadow: 0 0 0 0 currentColor; }
+    50% { opacity: 0.6; box-shadow: 0 0 0 4px transparent; }
+  }
+
+  /* Layout */
+  .container { max-width: 1240px; margin: 0 auto; padding: 20px 24px 40px; }
+
+  /* Cards */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px;
+    margin-bottom: 16px;
+    transition: border-color var(--transition), box-shadow var(--transition);
+  }
+  .card:hover { border-color: var(--border-hover); }
+  .card-title {
+    font-size: 11px; font-weight: 600; text-transform: uppercase;
+    letter-spacing: 0.8px; color: var(--text2); margin-bottom: 16px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .card-title::before {
+    content: '';
+    width: 3px; height: 14px;
+    border-radius: 2px;
+    background: var(--accent);
+    flex-shrink: 0;
+  }
+
+  /* Stat grid */
+  .stat-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 10px;
+  }
+  .stat-box {
+    background: var(--surface2);
+    border: 1px solid transparent;
+    border-radius: var(--radius-sm);
+    padding: 14px 12px;
+    text-align: center;
+    transition: all var(--transition);
+    position: relative;
+    overflow: hidden;
+  }
+  .stat-box::after {
+    content: '';
+    position: absolute; inset: 0;
+    background: linear-gradient(135deg, transparent 40%, rgba(255,255,255,0.02) 100%);
+    pointer-events: none;
+  }
+  .stat-box:hover {
+    transform: translateY(-2px);
+    border-color: var(--border);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+  }
+  .stat-value {
+    font-size: 22px; font-weight: 700; color: var(--text);
+    font-variant-numeric: tabular-nums;
+    line-height: 1.2;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .stat-value.green { color: var(--green); }
+  .stat-value.red { color: var(--red); }
+  .stat-value.yellow { color: var(--yellow); }
+  .stat-value.accent { color: var(--accent); }
+  .stat-value.purple { color: var(--purple); }
+  .stat-label {
+    font-size: 10px; color: var(--text2); margin-top: 4px;
+    text-transform: uppercase; letter-spacing: 0.4px; font-weight: 500;
+  }
+
+  /* Summary cards */
+  .summary-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 16px;
+  }
+  @media (max-width: 768px) { .summary-grid { grid-template-columns: 1fr; } }
+
+  .summary-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px;
+    transition: all var(--transition);
+    position: relative;
+  }
+  .summary-card:hover { border-color: var(--border-hover); }
+  .summary-card .card-title { margin-bottom: 14px; }
+  .summary-card .summary-stats {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+    margin-bottom: 16px;
+  }
+  .summary-card .mini-stat {
+    text-align: center;
+    padding: 10px 6px;
+    background: var(--surface2);
+    border-radius: var(--radius-sm);
+    transition: all var(--transition);
+  }
+  .summary-card .mini-stat:hover { background: var(--surface3); }
+  .mini-stat .mini-val {
+    font-size: 16px; font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    line-height: 1.2;
+  }
+  .mini-stat .mini-label {
+    font-size: 9px; color: var(--text2);
+    text-transform: uppercase; letter-spacing: 0.3px;
+    margin-top: 2px; font-weight: 500;
+  }
+
+  .summary-footer {
+    display: flex; align-items: center; justify-content: space-between;
+    padding-top: 12px;
+    border-top: 1px solid var(--border);
+  }
+  .summary-hint { font-size: 11px; color: var(--text2); }
+
+  /* Quick actions row */
+  .actions-row { display: flex; gap: 8px; flex-wrap: wrap; }
+
+  /* Buttons */
+  .btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 8px 16px;
+    font-size: 12px; font-weight: 500;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--surface2);
+    color: var(--text);
+    cursor: pointer;
+    transition: all var(--transition);
+    white-space: nowrap;
+    font-family: inherit;
+    position: relative;
+    overflow: hidden;
+  }
+  .btn::before {
+    content: '';
+    position: absolute; inset: 0;
+    background: linear-gradient(135deg, rgba(255,255,255,0.04) 0%, transparent 50%);
+    opacity: 0;
+    transition: opacity var(--transition);
+  }
+  .btn:hover::before { opacity: 1; }
+  .btn:hover { border-color: var(--border-hover); background: var(--surface3); }
+  .btn:active { transform: scale(0.97); }
+  .btn:disabled { opacity: 0.35; cursor: not-allowed; transform: none; }
+  .btn:disabled::before { display: none; }
+
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .btn.primary:hover { background: var(--accent2); border-color: var(--accent2); }
+  .btn.danger { border-color: rgba(248,113,113,0.4); color: var(--red); }
+  .btn.danger:hover { background: var(--red-bg); border-color: var(--red); }
+  .btn.success { border-color: rgba(52,211,153,0.4); color: var(--green); }
+  .btn.success:hover { background: var(--green-bg); border-color: var(--green); }
+  .btn.sm { padding: 5px 10px; font-size: 11px; }
+  .btn.ghost { background: transparent; border-color: transparent; }
+  .btn.ghost:hover { background: var(--surface2); border-color: var(--border); }
+
+  .btn .spinner {
+    width: 13px; height: 13px;
+    border: 2px solid transparent;
+    border-top-color: currentColor;
+    border-radius: 50%;
+    animation: spin 0.6s linear infinite;
+    display: none;
+  }
+  .btn.loading .spinner { display: inline-block; }
+  .btn.loading { pointer-events: none; opacity: 0.7; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Form fields */
+  label {
+    display: block; font-size: 10px; color: var(--text2);
+    margin-bottom: 4px; text-transform: uppercase;
+    letter-spacing: 0.4px; font-weight: 500;
+  }
+  input, select, textarea {
+    width: 100%;
+    padding: 8px 12px;
+    font-size: 13px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    outline: none;
+    transition: all var(--transition);
+    font-family: inherit;
+  }
+  input:focus, select:focus, textarea:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-glow);
+  }
+  input::placeholder { color: var(--text2); opacity: 0.6; }
+  textarea {
+    resize: vertical; min-height: 60px;
+    font-family: 'JetBrains Mono', monospace; font-size: 12px;
+  }
+  .field { margin-bottom: 12px; }
+  .field-row { display: flex; gap: 10px; }
+  .field-row > .field { flex: 1; }
+  .field .hint { font-size: 10px; color: var(--text2); margin-top: 2px; }
+
+  /* Section grid */
+  .section-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+  }
+  @media (max-width: 768px) {
+    .section-grid { grid-template-columns: 1fr; }
+  }
+
+  /* Config sub-sections */
+  .config-section {
+    margin-bottom: 16px;
+    padding-bottom: 14px;
+    border-bottom: 1px solid var(--border);
+  }
+  .config-section:last-of-type { border-bottom: none; margin-bottom: 8px; padding-bottom: 0; }
+  .config-section-title {
+    font-size: 11px; font-weight: 600; margin-bottom: 10px;
+    color: var(--accent); display: flex; align-items: center; gap: 6px;
+  }
+
+  /* Toast */
+  #toast-container {
+    position: fixed; bottom: 24px; right: 24px;
+    display: flex; flex-direction: column-reverse; gap: 8px;
+    z-index: 1000;
+    pointer-events: none;
+  }
+  .toast {
+    padding: 10px 18px;
+    border-radius: var(--radius-sm);
+    font-size: 12px; font-weight: 500;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow-lg);
+    animation: toastIn 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+    max-width: 380px;
+    word-break: break-word;
+    pointer-events: auto;
+    backdrop-filter: blur(12px);
+  }
+  .toast.success { border-color: var(--green); color: var(--green); background: rgba(13,17,23,0.95); }
+  .toast.error { border-color: var(--red); color: var(--red); background: rgba(13,17,23,0.95); }
+  .toast.fadeOut { animation: toastOut 0.3s ease-in forwards; }
+  @keyframes toastIn {
+    from { opacity: 0; transform: translateY(16px) scale(0.95); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+  }
+  @keyframes toastOut {
+    to { opacity: 0; transform: translateY(8px) scale(0.95); }
+  }
+
+  /* Modal */
+  .modal-overlay {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.65);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    display: none; align-items: center; justify-content: center;
+    z-index: 100;
+    animation: fadeIn 0.2s;
+    padding: 24px;
+  }
+  .modal-overlay.active { display: flex; }
+  .modal {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    width: 100%; max-width: 920px;
+    max-height: 85vh;
+    display: flex; flex-direction: column;
+    box-shadow: 0 24px 80px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.03);
+    animation: modalIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes modalIn {
+    from { opacity: 0; transform: scale(0.96) translateY(12px); }
+    to { opacity: 1; transform: scale(1) translateY(0); }
+  }
+
+  .modal-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 18px 24px;
+    border-bottom: 1px solid var(--border);
+  }
+  .modal-header h2 { font-size: 15px; font-weight: 600; }
+  .modal-close {
+    width: 30px; height: 30px;
+    display: flex; align-items: center; justify-content: center;
+    border-radius: 6px; border: 1px solid transparent;
+    background: transparent; color: var(--text2);
+    font-size: 16px; cursor: pointer;
+    transition: all var(--transition);
+  }
+  .modal-close:hover { background: var(--surface2); color: var(--text); border-color: var(--border); }
+
+  .modal-tabs {
+    display: flex; border-bottom: 1px solid var(--border);
+    padding: 0 24px; gap: 2px;
+    background: var(--surface);
+  }
+  .modal-tab {
+    padding: 11px 16px;
+    font-size: 12px; font-weight: 500;
+    color: var(--text2);
+    border: none; background: none;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: all var(--transition);
+    font-family: inherit;
+    position: relative;
+  }
+  .modal-tab:hover { color: var(--text); }
+  .modal-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+  .modal-body {
+    padding: 20px 24px;
+    overflow-y: auto;
+    flex: 1;
+  }
+  .tab-content { display: none; }
+  .tab-content.active { display: block; animation: tabFadeIn 0.25s ease-out; }
+  @keyframes tabFadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+
+  /* Table */
+  .data-table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    font-size: 12px;
+  }
+  .data-table th {
+    text-align: left;
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--border);
+    color: var(--text2);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    font-size: 10px;
+    position: sticky; top: 0;
+    background: var(--surface);
+  }
+  .data-table td {
+    padding: 7px 10px;
+    border-bottom: 1px solid rgba(33,40,58,0.5);
+    font-variant-numeric: tabular-nums;
+    transition: background var(--transition);
+  }
+  .data-table tr:hover td { background: var(--surface2); }
+  .data-table tr:last-child td { border-bottom: none; }
+  .mono { font-family: 'JetBrains Mono', monospace; font-size: 11px; }
+  .addr { max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  /* Job cards in observability */
+  .job-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 10px; }
+  .job-card {
+    background: var(--surface2); border-radius: var(--radius-sm); padding: 14px;
+    border: 1px solid var(--border);
+    transition: all var(--transition);
+  }
+  .job-card:hover { border-color: var(--border-hover); }
+  .job-card h4 { font-size: 12px; font-weight: 600; margin-bottom: 8px; color: var(--accent); text-transform: capitalize; }
+  .job-card .job-row { display: flex; justify-content: space-between; font-size: 11px; padding: 3px 0; }
+  .job-card .job-row .jl { color: var(--text2); }
+  .job-card .job-row.error-clickable { cursor: pointer; border-radius: 4px; margin: 0 -4px; padding: 3px 4px; }
+  .job-card .job-row.error-clickable:hover { background: var(--red-bg); }
+
+  /* Response viewer */
+  .response-box {
+    margin-top: 10px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    max-height: 180px;
+    overflow: auto;
+    display: none;
+  }
+  .response-box.visible { display: block; animation: tabFadeIn 0.2s; }
+  .response-box pre {
+    padding: 12px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    white-space: pre-wrap;
+    word-break: break-all;
+    line-height: 1.5;
+  }
+
+  /* Pagination */
+  .pagination {
+    display: flex; align-items: center; gap: 6px;
+    justify-content: center;
+    margin-top: 12px;
+  }
+  .pagination span { font-size: 11px; color: var(--text2); font-variant-numeric: tabular-nums; }
+
+  /* Fade-in for cards on load */
+  .animate-in {
+    animation: cardFadeIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+  @keyframes cardFadeIn {
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* Shimmer placeholder */
+  .shimmer {
+    background: linear-gradient(90deg, var(--surface2) 25%, var(--surface3) 50%, var(--surface2) 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.5s ease-in-out infinite;
+    border-radius: 4px;
+    color: transparent !important;
+  }
+  @keyframes shimmer {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+  }
+
+  /* Divider */
+  .divider { height: 1px; background: var(--border); margin: 4px 0; }
+
+  /* === Final Polish === */
+
+  /* Selection color */
+  ::selection { background: rgba(79,143,247,0.3); color: #fff; }
+
+  /* Subtle dot grid background */
+  body {
+    background-image: radial-gradient(rgba(79,143,247,0.035) 1px, transparent 1px);
+    background-size: 24px 24px;
+  }
+
+  /* Header gradient glow line */
+  .header::after {
+    content: '';
+    position: absolute;
+    bottom: -1px; left: 10%; right: 10%;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--accent), var(--purple), transparent);
+    opacity: 0.45;
+    pointer-events: none;
+  }
+
+  /* Brand text gradient shimmer */
+  .header h1 span {
+    background: linear-gradient(90deg, var(--accent), var(--purple), var(--accent));
+    background-size: 200% 100%;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    animation: textShimmer 8s ease-in-out infinite;
+  }
+  @keyframes textShimmer {
+    0%, 100% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+  }
+
+  /* Stat box colored hover glow */
+  .stat-box:has(.stat-value.green):hover { box-shadow: 0 8px 24px rgba(52,211,153,0.12), 0 0 0 1px rgba(52,211,153,0.08); }
+  .stat-box:has(.stat-value.red):hover { box-shadow: 0 8px 24px rgba(248,113,113,0.12), 0 0 0 1px rgba(248,113,113,0.08); }
+  .stat-box.clickable, .mini-stat.clickable { cursor: pointer; }
+  .stat-box.clickable:hover { border-color: var(--red); }
+  .mini-stat.clickable:hover { background: var(--surface3); border-color: var(--red); }
+  .stat-box:has(.stat-value.yellow):hover { box-shadow: 0 8px 24px rgba(251,191,36,0.12), 0 0 0 1px rgba(251,191,36,0.08); }
+  .stat-box:has(.stat-value.accent):hover { box-shadow: 0 8px 24px rgba(79,143,247,0.12), 0 0 0 1px rgba(79,143,247,0.08); }
+  .stat-box:has(.stat-value.purple):hover { box-shadow: 0 8px 24px rgba(167,139,250,0.12), 0 0 0 1px rgba(167,139,250,0.08); }
+
+  /* Summary card accent top line */
+  .summary-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 24px; right: 24px;
+    height: 2px;
+    border-radius: 0 0 2px 2px;
+    background: linear-gradient(90deg, var(--accent), var(--purple));
+    opacity: 0.45;
+    transition: opacity var(--transition);
+  }
+  .summary-card:hover::before { opacity: 0.8; }
+  .summary-card:last-child::before {
+    background: linear-gradient(90deg, var(--green), var(--yellow));
+  }
+
+  /* Card hover glow */
+  .card:hover {
+    box-shadow: 0 4px 20px rgba(0,0,0,0.15), 0 0 0 1px rgba(79,143,247,0.04);
+  }
+
+  /* Mini-stat hover lift */
+  .summary-card .mini-stat:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+  }
+
+  /* Table row accent border on hover */
+  .data-table tr:hover td:first-child {
+    box-shadow: inset 3px 0 0 var(--accent);
+  }
+
+  /* Job card hover lift */
+  .job-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+  }
+
+  /* Response box left accent */
+  .response-box.visible {
+    border-left: 3px solid var(--accent);
+  }
+
+  /* Copyable address */
+  .copy-addr {
+    cursor: pointer;
+    border-bottom: 1px dashed rgba(58,69,96,0.6);
+    transition: all var(--transition);
+    padding-bottom: 1px;
+  }
+  .copy-addr:hover {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+  }
+
+  /* Auto-refresh button */
+  .btn.auto-active {
+    border-color: var(--green) !important;
+    color: var(--green) !important;
+    background: var(--green-bg) !important;
+  }
+  .auto-dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--text2);
+    display: inline-block;
+    flex-shrink: 0;
+    transition: all var(--transition);
+  }
+  .btn.auto-active .auto-dot {
+    background: var(--green);
+    box-shadow: 0 0 6px rgba(52,211,153,0.6);
+    animation: pulse 2s ease-in-out infinite;
+  }
+  .auto-countdown {
+    font-variant-numeric: tabular-nums;
+    font-size: 10px;
+    opacity: 0.7;
+    min-width: 16px;
+    text-align: right;
+  }
+
+  /* Last updated */
+  .last-updated {
+    font-size: 10px;
+    color: var(--text2);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    transition: color var(--transition);
+  }
+
+  /* Modal close animation */
+  .modal-overlay.closing {
+    opacity: 0;
+    transition: opacity 0.2s ease;
+  }
+  .modal-overlay.closing .modal {
+    transform: scale(0.96) translateY(12px);
+    opacity: 0;
+    transition: all 0.2s ease;
+  }
+
+  /* Config section hover */
+  .config-section:hover .config-section-title { color: var(--text); }
+
+  /* Button group separator */
+  .actions-row > .btn + .btn.danger { margin-left: 2px; }
+
+  /* Clickable balance rows */
+  #balBody tr { cursor: pointer; }
+  #balBody tr:hover td { background: var(--surface3); }
+
+  /* Bot detail popover (small modal) */
+  .popover-overlay {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.45);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    display: none; align-items: center; justify-content: center;
+    z-index: 200;
+    animation: fadeIn 0.15s;
+    padding: 24px;
+  }
+  .popover-overlay.active { display: flex; }
+  .popover {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    width: 100%; max-width: 420px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.03);
+    animation: modalIn 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .popover-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--border);
+  }
+  .popover-header h3 { font-size: 13px; font-weight: 600; }
+  .popover-body { padding: 16px 18px; }
+  .popover-overlay.closing { opacity: 0; transition: opacity 0.15s ease; }
+  .popover-overlay.closing .popover { transform: scale(0.96); opacity: 0; transition: all 0.15s ease; }
+
+  /* Per-operation event history inside the error popover */
+  .pop-subhead {
+    font-size: 10px; text-transform: uppercase; letter-spacing: 0.7px;
+    color: var(--accent); font-weight: 600; margin-bottom: 8px;
+  }
+  .pop-filter {
+    font-size: 11px; padding: 3px 8px; border-radius: var(--radius-sm);
+    background: var(--surface2); border: 1px solid var(--border); color: var(--text);
+  }
+  .pop-hist { max-height: 280px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; }
+  .pop-hist-empty { font-size: 11px; color: var(--text2); padding: 10px 0; text-align: center; }
+  .pop-hist-item {
+    padding: 8px 10px; border-radius: var(--radius-sm);
+    background: var(--surface2); border: 1px solid var(--border);
+  }
+  .pop-hist-top { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 5px; }
+  .pop-hist-time { font-size: 10px; color: var(--text2); }
+  .pop-hist-bot { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--text2); }
+  .pop-hist-mk {
+    font-size: 9px; padding: 0 6px; border-radius: 8px;
+    background: var(--surface3); color: var(--text2);
+  }
+  .pop-hist-msg {
+    font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text);
+    word-break: break-word; line-height: 1.5;
+  }
+
+  /* Settings modal */
+  .icon-btn { display: inline-flex; align-items: center; justify-content: center; padding: 6px 8px; }
+  .settings-row { display: flex; gap: 8px; align-items: center; }
+  .settings-row input, .settings-row select { flex: 1; min-width: 0; }
+  .settings-hint { font-size: 10px; color: var(--text2); margin-top: 6px; line-height: 1.5; }
+  .settings-actions {
+    display: flex; justify-content: flex-end; gap: 10px;
+    margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--border);
+  }
+
+  /* Token list inside popover */
+  .token-list { list-style: none; }
+  .token-item {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 10px 12px;
+    border-radius: var(--radius-sm);
+    background: var(--surface2);
+    margin-bottom: 6px;
+    transition: all var(--transition);
+  }
+  .token-item:last-child { margin-bottom: 0; }
+  .token-item:hover { background: var(--surface3); }
+  .token-item .token-mint {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; color: var(--text2);
+    max-width: 180px; overflow: hidden;
+    text-overflow: ellipsis; white-space: nowrap;
+  }
+  .token-item .token-amount {
+    font-size: 14px; font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+  .token-item.sol-row { border-left: 3px solid var(--yellow); }
+  .token-item.token-row { border-left: 3px solid var(--purple); }
+  .token-empty {
+    text-align: center; padding: 20px;
+    color: var(--text2); font-size: 12px;
+  }
+
+  /* Entity picker (input + browse button wrapper) */
+  .input-with-picker {
+    position: relative;
+    display: flex; gap: 0;
+  }
+  .input-with-picker input {
+    flex: 1;
+    border-top-right-radius: 0;
+    border-bottom-right-radius: 0;
+  }
+  .picker-btn {
+    display: flex; align-items: center; justify-content: center;
+    width: 34px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-left: none;
+    border-radius: 0 6px 6px 0;
+    color: var(--text2);
+    cursor: pointer;
+    transition: all var(--transition);
+    flex-shrink: 0;
+  }
+  .picker-btn:hover { background: var(--surface3); color: var(--accent); }
+
+  /* Entity picker dropdown */
+  .picker-dropdown {
+    position: absolute;
+    top: 100%; left: 0; right: 0;
+    margin-top: 4px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    box-shadow: var(--shadow-lg);
+    max-height: 220px;
+    overflow-y: auto;
+    z-index: 60;
+    display: none;
+    animation: tabFadeIn 0.15s ease-out;
+  }
+  .picker-dropdown.active { display: block; }
+  .picker-dropdown .picker-search {
+    position: sticky; top: 0;
+    padding: 8px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+  }
+  .picker-dropdown .picker-search input {
+    border-radius: 6px;
+    font-size: 11px;
+    padding: 6px 10px;
+  }
+  .picker-item {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 7px 12px;
+    font-size: 11px;
+    cursor: pointer;
+    transition: background var(--transition);
+    border-bottom: 1px solid rgba(33,40,58,0.3);
+  }
+  .picker-item:last-child { border-bottom: none; }
+  .picker-item:hover { background: var(--surface2); }
+  .picker-item .picker-id { font-family: 'JetBrains Mono', monospace; color: var(--text); }
+  .picker-item .picker-addr { font-family: 'JetBrains Mono', monospace; color: var(--text2); font-size: 10px; }
+  .picker-item .picker-check { color: var(--green); font-weight: 700; display: none; }
+  .picker-item.selected .picker-check { display: inline; }
+
+  /* Bot Keys */
+  .keys-note { font-size: 11px; color: var(--text2); margin-bottom: 12px; line-height: 1.6; }
+  .keys-controls {
+    display: flex; align-items: flex-end; flex-wrap: wrap; gap: 10px;
+  }
+  .keys-controls .keys-secret-field { flex: 1; min-width: 220px; margin-bottom: 0; }
+  .keys-controls .btn { margin-bottom: 1px; }
+  .keys-list {
+    margin-top: 14px;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+    gap: 10px;
+  }
+  .keys-empty { font-size: 11px; color: var(--text2); padding: 8px 0; grid-column: 1 / -1; }
+  .key-row {
+    display: flex; flex-direction: column; gap: 10px;
+    padding: 12px 14px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+  }
+  .key-head {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    padding-bottom: 9px; border-bottom: 1px solid var(--border);
+  }
+  .key-head .key-hlabel { font-size: 9px; text-transform: uppercase; letter-spacing: 0.7px; color: var(--text2); }
+  .key-uuid { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text); }
+  .key-field { display: flex; flex-direction: row; align-items: flex-start; gap: 8px; }
+  .key-tag {
+    align-self: flex-start; display: inline-block; min-width: 34px; text-align: center; flex-shrink: 0;
+    margin-top: 1px;
+    font-size: 9px; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 700;
+    padding: 1px 6px; border-radius: 4px;
+    background: var(--accent-glow); color: var(--accent);
+  }
+  .key-tag.priv { background: var(--yellow-bg); color: var(--yellow); }
+  .key-fval {
+    flex: 1; min-width: 0;
+    font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text);
+    word-break: break-all; line-height: 1.55;
+  }
+  .key-fval.locked-val { color: var(--text2); font-style: italic; letter-spacing: 1px; }
+  .key-copy-hint { font-size: 9px; color: var(--text2); text-transform: uppercase; letter-spacing: 0.5px; }
+
+  /* Event Log */
+  .evlog-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+  .ev-filters {
+    display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px;
+    margin-bottom: 12px;
+  }
+  .ev-filters .field { margin-bottom: 0; min-width: 130px; }
+  .ev-meta { font-size: 11px; color: var(--text2); margin-bottom: 10px; }
+  .ev-empty { text-align: center; color: var(--text2); font-size: 12px; padding: 18px 0; }
+  th.ev-sortable { cursor: pointer; user-select: none; white-space: nowrap; }
+  th.ev-sortable:hover { color: var(--accent); }
+  .ev-badge {
+    display: inline-block; padding: 1px 7px; border-radius: 4px;
+    font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;
+  }
+  .ev-sev-error { background: var(--red-bg, rgba(239,68,68,0.12)); color: var(--red, #f87171); }
+  .ev-sev-warn { background: var(--yellow-bg); color: var(--yellow); }
+  #eventsTable td { vertical-align: top; }
+  .ev-time { white-space: nowrap; color: var(--text2); }
+  .ev-event { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--text2); }
+  .ev-msg { max-width: 420px; word-break: break-word; }
+  .ev-msg-compact { white-space: nowrap; }
+  .ev-msg-copy { font-family: 'JetBrains Mono', monospace; font-size: 11px; }
+  /* Compact toggles */
+  .ev-compact { display: flex; align-items: center; flex-wrap: wrap; gap: 14px; margin-bottom: 12px; }
+  .ev-compact-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.7px; color: var(--text2); }
+  tr.ev-group td {
+    background: var(--surface3); color: var(--accent);
+    font-size: 10px; text-transform: uppercase; letter-spacing: 0.6px; font-weight: 700;
+  }
+  .ev-group-count {
+    display: inline-block; margin-left: 8px; padding: 0 6px; border-radius: 9px;
+    background: var(--accent-glow); color: var(--accent); font-size: 9px;
+  }
+
+  /* Toggle switch (reusable) */
+  .switch { display: inline-flex; align-items: center; gap: 7px; cursor: pointer; user-select: none; }
+  .switch input { position: absolute; opacity: 0; width: 0; height: 0; }
+  .switch .switch-slider {
+    position: relative; width: 32px; height: 18px; flex-shrink: 0;
+    background: var(--surface3); border: 1px solid var(--border); border-radius: 999px;
+    transition: background var(--transition), border-color var(--transition);
+  }
+  .switch .switch-slider::after {
+    content: ''; position: absolute; top: 2px; left: 2px;
+    width: 12px; height: 12px; border-radius: 50%;
+    background: var(--text2); transition: transform var(--transition), background var(--transition);
+  }
+  .switch input:checked + .switch-slider { background: var(--accent-glow); border-color: var(--accent); }
+  .switch input:checked + .switch-slider::after { transform: translateX(14px); background: var(--accent); }
+  .switch input:focus-visible + .switch-slider { box-shadow: 0 0 0 2px var(--accent-glow); }
+  .switch .switch-text { font-size: 11px; color: var(--text); }
+
+  /* Info list (System & Runtime / Effective Config) */
+  .info-list { display: flex; flex-direction: column; }
+  .info-row {
+    display: flex; justify-content: space-between; align-items: baseline; gap: 14px;
+    padding: 8px 0;
+    border-bottom: 1px solid rgba(33,40,58,0.45);
+    font-size: 12px;
+  }
+  .info-row:last-child { border-bottom: none; }
+  .info-key { color: var(--text2); white-space: nowrap; }
+  .info-val {
+    color: var(--text); font-weight: 500; text-align: right;
+    font-family: 'JetBrains Mono', monospace; min-width: 0; word-break: break-word;
+  }
+  .info-val.ok { color: var(--green); }
+  .int-ok { color: var(--green); font-weight: 600; }
+  .int-warn { color: var(--yellow); font-weight: 600; }
+  .muted { color: var(--text2); font-style: italic; }
+  .info-subhead {
+    font-size: 10px; text-transform: uppercase; letter-spacing: 0.7px;
+    color: var(--accent); font-weight: 600;
+    margin: 14px 0 2px; padding-bottom: 4px;
+    border-bottom: 1px solid var(--border);
+  }
+  .info-subhead:first-child { margin-top: 0; }
+  .chips { display: flex; flex-wrap: wrap; gap: 5px; justify-content: flex-end; }
+  .chip {
+    display: inline-block; padding: 2px 9px; border-radius: 11px;
+    background: var(--surface3); border: 1px solid var(--border);
+    font-size: 10px; font-family: 'JetBrains Mono', monospace; color: var(--text);
+    transition: border-color var(--transition), background var(--transition);
+  }
+  .chip.copy-addr { cursor: pointer; }
+  .chip.copy-addr:hover { border-color: var(--accent); background: var(--accent-glow); }
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<div class="header">
+  <h1>
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+    <span>Dekant</span> Trader Bots
+  </h1>
+  <div class="header-right">
+    <span class="last-updated" id="lastUpdated"></span>
+    <div class="health-badge" id="healthBadge">
+      <div class="health-dot"></div>
+      <span id="healthLabel">Loading</span>
+    </div>
+    <button class="btn sm" id="btnAutoRefresh" onclick="toggleAutoRefresh()"><span class="auto-dot"></span> Auto <span class="auto-countdown" id="autoCountdown"></span></button>
+    <button class="btn sm" onclick="refreshAll()" id="btnRefresh"><span class="spinner"></span> Refresh</button>
+    <button class="btn sm icon-btn" onclick="openSettings()" id="btnSettings" title="Settings">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+    </button>
+  </div>
+</div>
+
+<!-- Settings Popover -->
+<div class="popover-overlay" id="settingsOverlay" onclick="if(event.target===this)closeSettings()">
+  <div class="popover" style="max-width:560px">
+    <div class="popover-header">
+      <h3>Settings</h3>
+      <button class="modal-close" onclick="closeSettings()">&times;</button>
+    </div>
+    <div class="popover-body">
+
+      <div class="pop-subhead">Connection</div>
+      <div class="field">
+        <label>Bot server URL (active)</label>
+        <select id="setBotUrlSelect" onchange="onSelectBotUrl()"></select>
+      </div>
+      <div class="field">
+        <label>Add a bot server URL</label>
+        <div class="settings-row">
+          <input id="setBotUrlNew" placeholder="https://bot.example.com" autocomplete="off" spellcheck="false">
+          <button class="btn sm primary" onclick="addBotUrl()">Add</button>
+          <button class="btn sm danger" onclick="removeBotUrl()" title="Remove the active URL from the list">Remove</button>
+        </div>
+        <div class="settings-hint" id="setProxyHint"></div>
+      </div>
+      <div class="field">
+        <label>Admin secret (x-security)</label>
+        <div class="settings-row">
+          <input id="setAdminSecret" type="password" placeholder="admin secret" autocomplete="off" spellcheck="false">
+          <button class="btn sm" onclick="toggleSecretVisible('setAdminSecret', this)">Show</button>
+        </div>
+      </div>
+
+      <div class="pop-subhead" style="margin-top:16px">Refresh</div>
+      <div class="field">
+        <label>Auto-refresh interval (seconds)</label>
+        <input id="setRefreshInterval" type="number" min="2" step="1" placeholder="30">
+      </div>
+      <label class="switch" style="margin-bottom:6px"><input type="checkbox" id="setAutoStart"><span class="switch-slider"></span><span class="switch-text">Start auto-refresh on load</span></label>
+
+      <div class="pop-subhead" style="margin-top:16px">Event Log defaults</div>
+      <label class="switch" style="margin-bottom:6px"><input type="checkbox" id="setCompactBots"><span class="switch-slider"></span><span class="switch-text">Compact bot IDs by default</span></label>
+      <label class="switch"><input type="checkbox" id="setCompactMsgs"><span class="switch-slider"></span><span class="switch-text">Compact messages by default</span></label>
+
+      <div class="settings-actions">
+        <button class="btn" onclick="closeSettings()">Cancel</button>
+        <button class="btn primary" onclick="saveSettingsFromModal()">Save</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="container">
+
+  <!-- Overview Stats -->
+  <div class="card animate-in" style="animation-delay: 0.05s">
+    <div class="card-title">Overview</div>
+    <div class="stat-grid" id="overviewStats">
+      <div class="stat-box"><div class="stat-value accent" id="sv-bots">--</div><div class="stat-label">Bots</div></div>
+      <div class="stat-box"><div class="stat-value green" id="sv-buys">--</div><div class="stat-label">Buy Trades</div></div>
+      <div class="stat-box"><div class="stat-value purple" id="sv-sells">--</div><div class="stat-label">Sell Trades</div></div>
+      <div class="stat-box"><div class="stat-value green" id="sv-buyVol">--</div><div class="stat-label">Buy Volume</div></div>
+      <div class="stat-box"><div class="stat-value purple" id="sv-sellVol">--</div><div class="stat-label">Sell Volume</div></div>
+      <div class="stat-box clickable" onclick="openModal('tabObservability')" title="View error details"><div class="stat-value red" id="sv-fails">--</div><div class="stat-label">Failed Actions</div></div>
+      <div class="stat-box"><div class="stat-value yellow" id="sv-uptime">--</div><div class="stat-label">Uptime</div></div>
+      <div class="stat-box"><div class="stat-value" id="sv-lastTrade">--</div><div class="stat-label">Last Trade</div></div>
+    </div>
+  </div>
+
+  <!-- Quick Actions -->
+  <div class="card animate-in" style="animation-delay: 0.1s">
+    <div class="card-title">Quick Actions</div>
+    <div class="actions-row" style="margin-bottom: 12px">
+      <button class="btn success" id="btnBuy" onclick="forceBuy()"><span class="spinner"></span> Force Buy</button>
+      <button class="btn danger" id="btnSell" onclick="forceSell()"><span class="spinner"></span> Force Sell</button>
+      <button class="btn" id="btnPrefund" onclick="prefund()"><span class="spinner"></span> Prefund All</button>
+    </div>
+    <div class="field">
+      <label>Market IDs (comma separated, leave empty for all)</label>
+      <div class="input-with-picker">
+        <input id="marketIdsInput" placeholder="e.g. market-id-1, market-id-2">
+        <button class="picker-btn" onclick="togglePicker('marketPicker', 'market')" title="Browse markets">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"/><path d="M3 12h18"/><path d="M3 18h18"/></svg>
+        </button>
+        <div class="picker-dropdown" id="marketPicker"></div>
+      </div>
+    </div>
+    <div class="response-box" id="quickResponse"><pre></pre></div>
+  </div>
+
+  <!-- Summary Cards: Trade Stats + Balances -->
+  <div class="summary-grid animate-in" style="animation-delay: 0.15s">
+
+    <!-- Trade Stats Summary -->
+    <div class="summary-card">
+      <div class="card-title">Trade Stats</div>
+      <div class="summary-stats" id="tradeStatsSummary">
+        <div class="mini-stat"><div class="mini-val green" id="sum-totalTrades">--</div><div class="mini-label">Total Trades</div></div>
+        <div class="mini-stat"><div class="mini-val" id="sum-totalVol">--</div><div class="mini-label">Total Volume</div></div>
+        <div class="mini-stat clickable" onclick="openModal('tabObservability')" title="View error details"><div class="mini-val red" id="sum-totalFails">--</div><div class="mini-label">Failed</div></div>
+      </div>
+      <div class="summary-footer">
+        <span class="summary-hint" id="statsSummaryHint">--</span>
+        <button class="btn sm primary" onclick="openModal('tabStats')">Details</button>
+      </div>
+    </div>
+
+    <!-- Balances Summary -->
+    <div class="summary-card">
+      <div class="card-title">Bot Balances</div>
+      <div class="summary-stats" id="balSummary">
+        <div class="mini-stat"><div class="mini-val accent" id="sum-balBots">--</div><div class="mini-label">Bots</div></div>
+        <div class="mini-stat"><div class="mini-val yellow" id="sum-totalSol">--</div><div class="mini-label">Total SOL</div></div>
+        <div class="mini-stat"><div class="mini-val green" id="sum-avgSol">--</div><div class="mini-label">Avg SOL</div></div>
+      </div>
+      <div class="summary-footer">
+        <span class="summary-hint" id="balSummaryHint">--</span>
+        <button class="btn sm primary" onclick="openModal('tabBalances')">Details</button>
+      </div>
+    </div>
+
+    <!-- Claim Payouts Summary (hidden until claiming is enabled on the server) -->
+    <div class="summary-card" id="claimCard" style="grid-column: 1 / -1; display: none">
+      <div class="card-title">Claim Payouts</div>
+      <div class="summary-stats">
+        <div class="mini-stat"><div class="mini-val green" id="claim-claimed">--</div><div class="mini-label">Claimed (last pass)</div></div>
+        <div class="mini-stat"><div class="mini-val yellow" id="claim-pending">--</div><div class="mini-label">Pending Markets</div></div>
+        <div class="mini-stat"><div class="mini-val red" id="claim-failed">--</div><div class="mini-label">Failed (last pass)</div></div>
+      </div>
+      <div class="summary-footer">
+        <span class="summary-hint" id="claimHint">--</span>
+        <button class="btn sm primary" id="btnClaim" onclick="claimPayouts()"><span class="spinner"></span> Claim Now</button>
+      </div>
+      <div class="response-box" id="claimResponse"><pre></pre></div>
+    </div>
+
+  </div>
+
+  <!-- System & Runtime: data the server reports that isn't in the cards above -->
+  <div class="section-grid animate-in" style="animation-delay: 0.18s">
+
+    <!-- Service -->
+    <div class="card">
+      <div class="card-title">System &amp; Runtime</div>
+      <div class="info-list">
+        <div class="info-row"><span class="info-key">Service</span><span class="info-val" id="sysService">--</span></div>
+        <div class="info-row"><span class="info-key">Health</span><span class="info-val" id="sysHealth">--</span></div>
+        <div class="info-row"><span class="info-key">Running since</span><span class="info-val" id="sysStartedAt">--</span></div>
+        <div class="info-row"><span class="info-key">Uptime</span><span class="info-val" id="sysUptime">--</span></div>
+        <div class="info-row"><span class="info-key">Bots created on startup</span><span class="info-val" id="sysCreatedBots">--</span></div>
+        <div class="info-row"><span class="info-key">Initial funding</span><span class="info-val" id="sysInitFunding">--</span></div>
+        <div class="info-row"><span class="info-key">Stats generated</span><span class="info-val" id="sysStatsGen">--</span></div>
+      </div>
+    </div>
+
+    <!-- Effective Config (read-only view of the live runtime config) -->
+    <div class="card">
+      <div class="card-title">Effective Config</div>
+      <div class="info-list">
+        <div class="info-subhead">Trading</div>
+        <div class="info-row"><span class="info-key">Buy / Sell chance</span><span class="info-val" id="ecChances">--</span></div>
+        <div class="info-row"><span class="info-key">Max amount</span><span class="info-val" id="ecMaxAmount">--</span></div>
+        <div class="info-row"><span class="info-key">Prefund multiplier</span><span class="info-val" id="ecPrefund">--</span></div>
+        <div class="info-subhead">Funding</div>
+        <div class="info-row"><span class="info-key">Min bot SOL</span><span class="info-val" id="ecMinSol">--</span></div>
+        <div class="info-row"><span class="info-key">Topup cooldown</span><span class="info-val" id="ecCooldown">--</span></div>
+        <div class="info-row"><span class="info-key">Supported mints</span><span class="info-val chips" id="ecMints">--</span></div>
+        <div class="info-subhead">Price &amp; Markets</div>
+        <div class="info-row"><span class="info-key">Stale price policy</span><span class="info-val" id="ecStale">--</span></div>
+        <div class="info-row"><span class="info-key">Ignored markets</span><span class="info-val chips" id="ecIgnored">--</span></div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Integrations & Program: external services and the on-chain program the bot talks to -->
+  <div class="card animate-in" id="integrationCard" style="animation-delay: 0.19s; display:none">
+    <div class="card-title">Integrations &amp; Program</div>
+    <p class="keys-note" style="margin-bottom:10px">
+      The external services and on-chain program the bots interact with. Read-only — these are set via the
+      server environment. The in-use program ID is shown against the bundled IDL's address so a mismatch is obvious.
+    </p>
+    <div class="info-list">
+      <div class="info-subhead">Services</div>
+      <div class="info-row"><span class="info-key">Backend (Dekant)</span><span class="info-val" id="intBackend">--</span></div>
+      <div class="info-row"><span class="info-key">Price API</span><span class="info-val" id="intPrice">--</span></div>
+      <div class="info-row"><span class="info-key">Solana RPC</span><span class="info-val" id="intRpc">--</span></div>
+      <div class="info-subhead">Program</div>
+      <div class="info-row"><span class="info-key">Program ID (in use)</span><span class="info-val" id="intProgramId">--</span></div>
+      <div class="info-row"><span class="info-key">Resolved from</span><span class="info-val" id="intProgramSource">--</span></div>
+      <div class="info-row"><span class="info-key">IDL program ID</span><span class="info-val" id="intIdlProgramId">--</span></div>
+      <div class="info-row"><span class="info-key">Program / IDL match</span><span class="info-val" id="intProgramMatch">--</span></div>
+    </div>
+  </div>
+
+  <!-- Two-column sections -->
+  <div class="section-grid animate-in" style="animation-delay: 0.2s">
+
+    <!-- Runtime Config -->
+    <div class="card">
+      <div class="card-title">Runtime Config</div>
+      <p style="font-size: 11px; color: var(--text2); margin-bottom: 14px">
+        Current values shown as placeholders. Edit and click Update to apply.
+      </p>
+
+      <div class="config-section">
+        <div class="config-section-title">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20V10"/><path d="M18 20V4"/><path d="M6 20v-4"/></svg>
+          Trading
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label>Buy Chance (%)</label>
+            <input id="cfgBuyChance" type="number" min="0" max="100" placeholder="--">
+          </div>
+          <div class="field">
+            <label>Sell Chance (%)</label>
+            <input id="cfgSellChance" type="number" min="0" max="100" placeholder="--">
+          </div>
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label>Max Amount</label>
+            <input id="cfgMaxAmount" type="number" min="0.01" step="0.01" placeholder="--">
+          </div>
+          <div class="field">
+            <label>Prefund Multiplier</label>
+            <input id="cfgPrefundMul" type="number" min="0.1" step="0.1" placeholder="--">
+          </div>
+        </div>
+      </div>
+
+      <div class="config-section">
+        <div class="config-section-title">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+          Funding
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label>Min Bot SOL</label>
+            <input id="cfgMinSol" type="number" min="0.01" step="0.01" placeholder="--">
+          </div>
+          <div class="field">
+            <label>Topup Cooldown (ms)</label>
+            <input id="cfgCooldown" type="number" min="1" step="1" placeholder="--">
+          </div>
+        </div>
+      </div>
+
+      <div class="config-section">
+        <div class="config-section-title">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4"/><path d="M12 18v4"/><path d="m4.93 4.93 2.83 2.83"/><path d="m16.24 16.24 2.83 2.83"/></svg>
+          Price
+        </div>
+        <div class="field">
+          <label>Stale Price Policy</label>
+          <select id="cfgStalePolicy">
+            <option value="">-- unchanged --</option>
+            <option value="skip">skip</option>
+            <option value="allow">allow</option>
+          </select>
+        </div>
+      </div>
+
+      <button class="btn primary" id="btnCfgUpdate" onclick="updateConfig()"><span class="spinner"></span> Update Config</button>
+      <div class="response-box" id="cfgResponse"><pre></pre></div>
+    </div>
+
+    <!-- Right column stack -->
+    <div>
+      <!-- Bot management -->
+      <div class="card">
+        <div class="card-title">Bot Management</div>
+        <div class="field-row" style="align-items: flex-end">
+          <div class="field" style="flex: 1">
+            <label>Count</label>
+            <input id="addBotCount" type="number" min="1" value="3" placeholder="3">
+          </div>
+          <div style="padding-bottom: 12px">
+            <button class="btn primary" id="btnAddBots" onclick="addBots()"><span class="spinner"></span> Add Bots</button>
+          </div>
+        </div>
+        <div class="response-box" id="addBotsResponse"><pre></pre></div>
+      </div>
+
+      <!-- Manual Fund -->
+      <div class="card">
+        <div class="card-title">Manual Fund</div>
+        <div class="field">
+          <label>Bot IDs (comma separated, leave empty for all)</label>
+          <div class="input-with-picker">
+            <input id="fundBotIds" placeholder="bot-1, bot-2">
+            <button class="picker-btn" onclick="togglePicker('fundBotPicker', 'bot')" title="Browse bots">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"/><path d="M3 12h18"/><path d="M3 18h18"/></svg>
+            </button>
+            <div class="picker-dropdown" id="fundBotPicker"></div>
+          </div>
+        </div>
+        <div class="field">
+          <label>Addresses (comma separated)</label>
+          <input id="fundAddresses" placeholder="SoLaNaPuBkEy...">
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label>Amount</label>
+            <input id="fundAmount" type="number" min="0" step="0.01" placeholder="default">
+          </div>
+          <div class="field">
+            <label>Token (mint address)</label>
+            <input id="fundToken" placeholder="default">
+          </div>
+        </div>
+        <button class="btn primary" id="btnFund" onclick="manualFund()"><span class="spinner"></span> Fund</button>
+        <div class="response-box" id="fundResponse"><pre></pre></div>
+      </div>
+
+      <!-- Ignored Markets -->
+      <div class="card">
+        <div class="card-title">Ignored Markets</div>
+        <div class="field">
+          <label>Market IDs (comma separated)</label>
+          <div class="input-with-picker">
+            <input id="ignoredMarketIds" placeholder="market-id-1, market-id-2">
+            <button class="picker-btn" onclick="togglePicker('ignoredMarketPicker', 'market')" title="Browse markets">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"/><path d="M3 12h18"/><path d="M3 18h18"/></svg>
+            </button>
+            <div class="picker-dropdown" id="ignoredMarketPicker"></div>
+          </div>
+        </div>
+        <div class="actions-row" style="margin-top: 4px">
+          <button class="btn success sm" id="btnIgnoreAdd" onclick="addIgnored()"><span class="spinner"></span> Add to Ignored</button>
+          <button class="btn danger sm" id="btnIgnoreRm" onclick="removeIgnored()"><span class="spinner"></span> Remove from Ignored</button>
+        </div>
+        <div class="response-box" id="ignoredResponse"><pre></pre></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Event Log (recent errors & warnings, tagged by bot / operation / time) -->
+  <div class="card animate-in" style="animation-delay: 0.21s">
+    <div class="card-title evlog-head">
+      <span>Event Log</span>
+      <button class="btn sm" id="btnLoadEvents" onclick="loadEvents()"><span class="spinner"></span> Refresh</button>
+    </div>
+    <p class="keys-note" style="margin-bottom:10px">
+      Recent errors and warnings from the bot fleet, tagged with the bot, operation and time.
+      In-memory only (the most recent <span id="evCapacity">300</span> events; resets on restart).
+    </p>
+    <div class="ev-filters">
+      <div class="field">
+        <label>Severity</label>
+        <select id="evFilterSeverity" onchange="renderEvents()">
+          <option value="">All</option>
+          <option value="error">Errors</option>
+          <option value="warn">Warnings</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Operation</label>
+        <select id="evFilterJob" onchange="renderEvents()"><option value="">All</option></select>
+      </div>
+      <div class="field">
+        <label>Bot</label>
+        <select id="evFilterBot" onchange="renderEvents()"><option value="">All</option></select>
+      </div>
+      <div class="field" style="flex:1.4">
+        <label>Search message</label>
+        <input id="evFilterSearch" placeholder="filter text…" oninput="renderEvents()" autocomplete="off">
+      </div>
+      <div class="field">
+        <label>Group by</label>
+        <select id="evGroupBy" onchange="renderEvents()">
+          <option value="">None</option>
+          <option value="bot">Bot</option>
+          <option value="job">Operation</option>
+          <option value="severity">Severity</option>
+        </select>
+      </div>
+    </div>
+    <div class="ev-compact">
+      <span class="ev-compact-label">Compact table:</span>
+      <label class="switch"><input type="checkbox" id="evShortBots" onchange="renderEvents()"><span class="switch-slider"></span><span class="switch-text">Bot IDs</span></label>
+      <label class="switch"><input type="checkbox" id="evShortMsgs" onchange="renderEvents()"><span class="switch-slider"></span><span class="switch-text">Messages</span></label>
+    </div>
+    <div class="ev-meta" id="evMeta">No events loaded.</div>
+    <div style="overflow-x:auto">
+      <table class="data-table" id="eventsTable">
+        <thead>
+          <tr>
+            <th class="ev-sortable" onclick="sortEvents('time')">Time</th>
+            <th>Severity</th>
+            <th class="ev-sortable" onclick="sortEvents('job')">Operation</th>
+            <th>Bot</th>
+            <th>Market</th>
+            <th>Type</th>
+            <th>Event</th>
+            <th>Message</th>
+          </tr>
+        </thead>
+        <tbody id="eventsBody"><tr><td colspan="8" class="ev-empty">No events loaded.</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Bot Keys (full-width row of its own — bots listed in a responsive grid) -->
+  <div class="card animate-in" style="animation-delay: 0.22s">
+    <div class="card-title">Bot Keys</div>
+    <p class="keys-note">
+      Exports each bot's public key and its <strong>encrypted</strong> private key.
+      Private keys arrive encrypted (AES-256-GCM) and are decrypted in your browser only —
+      they are never sent or stored in plaintext. Enter <strong>BOTS_KEY_GUARD</strong>
+      (defaults to the admin secret <strong>reversed</strong> when that env is unset) to unlock them.
+    </p>
+    <div class="keys-controls">
+      <button class="btn sm" id="btnLoadKeys" onclick="loadBotKeys()"><span class="spinner"></span> Load Keys</button>
+      <div class="field keys-secret-field">
+        <label>Decryption secret (BOTS_KEY_GUARD — defaults to admin secret reversed)</label>
+        <input id="keysDecryptSecret" type="password" placeholder="BOTS_KEY_GUARD" autocomplete="off" spellcheck="false">
+      </div>
+      <button class="btn primary sm" id="btnDecryptKeys" onclick="decryptBotKeys()"><span class="spinner"></span> Decrypt</button>
+      <button class="btn sm" id="btnHideKeys" onclick="hideBotKeys()">Hide Secrets</button>
+    </div>
+    <div class="keys-list" id="botKeysList"><div class="keys-empty">No keys loaded.</div></div>
+  </div>
+</div>
+
+<!-- Details Modal -->
+<div class="modal-overlay" id="modalOverlay" onclick="if(event.target===this)closeModal()">
+  <div class="modal">
+    <div class="modal-header">
+      <h2>Bot Details</h2>
+      <button class="modal-close" onclick="closeModal()">&times;</button>
+    </div>
+    <div class="modal-tabs">
+      <button class="modal-tab active" data-tab="tabStats" onclick="switchTab(this)">Trade Stats</button>
+      <button class="modal-tab" data-tab="tabBalances" onclick="switchTab(this)">Balances</button>
+      <button class="modal-tab" data-tab="tabObservability" onclick="switchTab(this)">Observability</button>
+      <button class="modal-tab" data-tab="tabRaw" onclick="switchTab(this)">Raw Status</button>
+    </div>
+    <div class="modal-body">
+
+      <!-- Tab: Stats -->
+      <div class="tab-content active" id="tabStats">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+          <span style="font-size:11px;color:var(--text2)" id="statsPageInfo">--</span>
+          <div class="pagination" id="statsPagination"></div>
+        </div>
+        <div style="overflow-x:auto">
+          <table class="data-table" id="statsTable">
+            <thead>
+              <tr>
+                <th>Bot ID</th>
+                <th>Address</th>
+                <th>Buy Trades</th>
+                <th>Sell Trades</th>
+                <th>Total</th>
+                <th>Buy Vol</th>
+                <th>Sell Vol</th>
+                <th>Total Vol</th>
+                <th>Failed Buys</th>
+                <th>Failed Sells</th>
+                <th>Last Trade</th>
+              </tr>
+            </thead>
+            <tbody id="statsBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Tab: Balances -->
+      <div class="tab-content" id="tabBalances">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+          <span style="font-size:11px;color:var(--text2)" id="balPageInfo">--</span>
+          <div class="pagination" id="balPagination"></div>
+        </div>
+        <div style="overflow-x:auto">
+          <table class="data-table" id="balTable">
+            <thead>
+              <tr>
+                <th>Bot ID</th>
+                <th>Address</th>
+                <th>SOL</th>
+                <th>Tokens</th>
+              </tr>
+            </thead>
+            <tbody id="balBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Tab: Observability -->
+      <div class="tab-content" id="tabObservability">
+        <div class="stat-grid" style="margin-bottom:16px" id="obsTotals"></div>
+        <div class="job-grid" id="obsJobs"></div>
+      </div>
+
+      <!-- Tab: Raw Status -->
+      <div class="tab-content" id="tabRaw">
+        <div style="font-size:11px;color:var(--text2);margin-bottom:8px">Full /admin/status response:</div>
+        <div style="background:var(--surface2);border-radius:var(--radius-sm);padding:14px;max-height:500px;overflow:auto;border:1px solid var(--border)">
+          <pre id="rawStatusPre" class="mono" style="white-space:pre-wrap;word-break:break-all;font-size:11px;line-height:1.6">Loading...</pre>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- Bot Balance Popover -->
+<div class="popover-overlay" id="botPopoverOverlay" onclick="if(event.target===this)closeBotPopover()">
+  <div class="popover">
+    <div class="popover-header">
+      <h3 id="botPopoverTitle">Bot Balances</h3>
+      <button class="modal-close" onclick="closeBotPopover()">&times;</button>
+    </div>
+    <div class="popover-body" id="botPopoverBody"></div>
+  </div>
+</div>
+
+<!-- Error Detail Popover -->
+<div class="popover-overlay" id="errorPopoverOverlay" onclick="if(event.target===this)closeErrorPopover()">
+  <div class="popover" style="max-width:560px">
+    <div class="popover-header">
+      <h3 id="errorPopoverTitle">Error Details</h3>
+      <button class="modal-close" onclick="closeErrorPopover()">&times;</button>
+    </div>
+    <div class="popover-body" id="errorPopoverBody"></div>
+  </div>
+</div>
+
+<div id="toast-container"></div>
+
+<script>
+/* ────────────────────────────────────────────
+   Helpers
+   ──────────────────────────────────────────── */
+
+/* ────────────────────────────────────────────
+   Settings (persisted in localStorage)
+   - Bot server URL: seeded from what panel-server.mjs provides, then user-managed.
+     Requests go to the panel-server proxy (same origin) with the selected URL in
+     an x-proxy-target header, so switching servers needs no restart and no CORS.
+   - Admin secret: seeded from the built-in default below, single value, editable.
+   ──────────────────────────────────────────── */
+const INJECTED_BOT_URL = '__PANEL_BOT_URL__';                 // replaced by panel-server.mjs
+const PROXY_MODE = !INJECTED_BOT_URL.startsWith('__PANEL_');  // false when opened without the proxy
+const DEFAULT_ADMIN_SECRET = 'NOT_SET';
+const DEFAULT_BOT_URL = PROXY_MODE ? INJECTED_BOT_URL : window.location.origin;
+const SETTINGS_KEY = 'dekantPanel.settings.v1';
+const DEFAULT_SETTINGS = {
+  adminSecret: DEFAULT_ADMIN_SECRET,
+  botUrls: [DEFAULT_BOT_URL],
+  botUrl: DEFAULT_BOT_URL,
+  refreshInterval: 30,
+  autoStart: false,
+  compactBots: false,
+  compactMsgs: false
+};
+
+function loadSettings() {
+  let s = null;
+  try { s = JSON.parse(localStorage.getItem(SETTINGS_KEY) || 'null'); } catch { s = null; }
+  if (!s || typeof s !== 'object') s = {};
+  const merged = { ...DEFAULT_SETTINGS, ...s };
+  merged.botUrls = (Array.isArray(merged.botUrls) ? merged.botUrls : []).filter(Boolean);
+  if (!merged.botUrls.length) merged.botUrls = [DEFAULT_BOT_URL];
+  merged.botUrls = [...new Set(merged.botUrls)];
+  if (!merged.botUrls.includes(merged.botUrl)) merged.botUrl = merged.botUrls[0];
+  if (!(merged.refreshInterval > 0)) merged.refreshInterval = 30;
+  if (!merged.adminSecret) merged.adminSecret = DEFAULT_ADMIN_SECRET;
+  return merged;
+}
+
+let settings = loadSettings();
+
+function saveSettings() {
+  try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); } catch (e) { /* storage disabled */ }
+}
+
+function getBase() { return PROXY_MODE ? window.location.origin : settings.botUrl; }
+function getSecret() { return settings.adminSecret || DEFAULT_ADMIN_SECRET; }
+
+async function api(method, path, body) {
+  const url = getBase() + path;
+  const headers = { 'x-security': getSecret() };
+  if (PROXY_MODE) headers['x-proxy-target'] = settings.botUrl;
+  const opts = { method, headers };
+  if (body !== undefined) {
+    headers['Content-Type'] = 'application/json';
+    opts.body = JSON.stringify(body);
+  }
+  const res = await fetch(url, opts);
+  const json = await res.json();
+  if (!res.ok) throw Object.assign(new Error(json.error || res.statusText), { data: json });
+  return json;
+}
+
+function toast(msg, type = 'success') {
+  const el = document.createElement('div');
+  el.className = `toast ${type}`;
+  el.textContent = msg;
+  document.getElementById('toast-container').appendChild(el);
+  setTimeout(() => { el.classList.add('fadeOut'); setTimeout(() => el.remove(), 300); }, 3500);
+}
+
+function showResponse(id, data) {
+  const box = document.getElementById(id);
+  box.classList.add('visible');
+  box.querySelector('pre').textContent = JSON.stringify(data, null, 2);
+}
+
+function setLoading(btnId, loading) {
+  const btn = document.getElementById(btnId);
+  if (!btn) return;
+  btn.classList.toggle('loading', loading);
+}
+
+function parseCSV(val) {
+  return val.split(',').map(s => s.trim()).filter(Boolean);
+}
+
+function shortAddr(addr) {
+  if (!addr || addr.length < 12) return addr || '--';
+  return addr.slice(0, 5) + '...' + addr.slice(-4);
+}
+
+// Compact a long string to start…end, keeping `head`/`tail` chars. Returns the
+// original if it's already short enough.
+function shortenMiddle(str, head = 8, tail = 8) {
+  const s = String(str ?? '');
+  if (s.length <= head + tail + 1) return s;
+  return s.slice(0, head) + '…' + s.slice(-tail);
+}
+
+function escapeHtml(s) {
+  return String(s ?? '').replace(/[<>"'&]/g, c => (
+    { '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;', '&': '&amp;' }[c]
+  ));
+}
+
+function copyableAddr(addr) {
+  if (!addr || addr.length < 12) return addr || '--';
+  const safe = addr.replace(/[<>"'&]/g, '');
+  return `<span class="copy-addr" data-copy="${safe}" title="Click to copy">${shortAddr(addr)}</span>`;
+}
+
+// Full value (not shortened), click-to-copy. For URLs / program ids where the
+// operator wants to read the whole string. Entities decode back on copy.
+function copyableText(value) {
+  if (!value) return '<span class="muted">--</span>';
+  const safe = escapeHtml(value);
+  return `<span class="copy-addr" data-copy="${safe}" title="Click to copy">${safe}</span>`;
+}
+
+// Delegated click-to-copy handler
+document.addEventListener('click', e => {
+  const el = e.target.closest('.copy-addr');
+  if (!el) return;
+  navigator.clipboard.writeText(el.dataset.copy)
+    .then(() => toast('Copied!'))
+    .catch(() => toast('Copy failed', 'error'));
+});
+
+function fmtTime(iso) {
+  if (!iso) return '--';
+  const d = new Date(iso);
+  const now = new Date();
+  const time = d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
+  if (d.toDateString() === now.toDateString()) return time;
+
+  const yesterday = new Date(now);
+  yesterday.setDate(yesterday.getDate() - 1);
+  if (d.toDateString() === yesterday.toDateString()) return 'Yesterday ' + time;
+
+  const calendarDays = Math.floor((new Date(now.getFullYear(), now.getMonth(), now.getDate()) - new Date(d.getFullYear(), d.getMonth(), d.getDate())) / 86400000);
+  if (calendarDays < 7) return calendarDays + 'd ago ' + time;
+  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) + ' ' + time;
+}
+
+function fmtUptime(ms) {
+  if (!ms && ms !== 0) return '--';
+  const s = Math.floor(ms / 1000);
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  if (h > 0) return `${h}h ${m}m`;
+  return `${m}m ${s % 60}s`;
+}
+
+function fmtNum(n) {
+  if (n === null || n === undefined || n === '--') return '--';
+  if (typeof n === 'number') {
+    if (Math.abs(n) >= 1_000_000) return (n / 1_000_000).toFixed(2) + 'M';
+    if (Math.abs(n) >= 10_000) return (n / 1_000).toFixed(1) + 'K';
+    return n.toLocaleString(undefined, { maximumFractionDigits: 4 });
+  }
+  return n;
+}
+
+function fmtNumFull(n) {
+  if (n === null || n === undefined) return '--';
+  if (typeof n === 'number') return n.toLocaleString(undefined, { maximumFractionDigits: 6 });
+  return n;
+}
+
+/* ────────────────────────────────────────────
+   State
+   ──────────────────────────────────────────── */
+let cachedStatus = null;
+let cachedStatsData = null;
+let cachedBalData = null;
+let cachedBotList = null;
+let cachedMarketList = null;
+let statsPage = 1;
+let balPage = 1;
+const PAGE_SIZE = 10;
+let cachedEvents = null;
+let evSort = { key: 'time', dir: 'desc' };
+
+/* ────────────────────────────────────────────
+   Refresh All
+   ──────────────────────────────────────────── */
+async function refreshAll() {
+  setLoading('btnRefresh', true);
+  await Promise.allSettled([loadStatus(), loadStats(1), loadBalanceSummary(), loadEvents(true)]);
+  setLoading('btnRefresh', false);
+  document.getElementById('lastUpdated').textContent = 'Updated ' + new Date().toLocaleTimeString();
+}
+
+/* ────────────────────────────────────────────
+   Health & Status
+   ──────────────────────────────────────────── */
+async function loadStatus() {
+  try {
+    const data = await api('GET', '/admin/status');
+    cachedStatus = data;
+    renderStatus(data);
+    document.getElementById('rawStatusPre').textContent = JSON.stringify(data, null, 2);
+  } catch (e) {
+    const badge = document.getElementById('healthBadge');
+    badge.className = 'health-badge error';
+    document.getElementById('healthLabel').textContent = 'Error';
+    toast(e.message || 'Failed to load status', 'error');
+  }
+}
+
+function renderStatus(data) {
+  const badge = document.getElementById('healthBadge');
+  const runtime = data.runtime || {};
+  const obs = runtime.observability || {};
+  const health = obs.health || data.status || 'ok';
+
+  badge.className = 'health-badge ' + health;
+  document.getElementById('healthLabel').textContent = health.toUpperCase();
+
+  document.getElementById('sv-bots').textContent = fmtNum(runtime.botCount ?? '--');
+  document.getElementById('sv-uptime').textContent = fmtUptime(obs.uptimeMs);
+
+  // Populate config placeholders from the live runtime config. Falls back to the
+  // legacy top-level fields when an older server doesn't send `config`.
+  const cfg = runtime.config || null;
+  if (cfg) {
+    setPlaceholder('cfgBuyChance', cfg.trading && cfg.trading.buyChance);
+    setPlaceholder('cfgSellChance', cfg.trading && cfg.trading.sellChance);
+    setPlaceholder('cfgMaxAmount', cfg.trading && cfg.trading.maxAmount);
+    setPlaceholder('cfgPrefundMul', cfg.trading && cfg.trading.prefundMultiplier);
+    setPlaceholder('cfgMinSol', cfg.funding && cfg.funding.minBotSol);
+    setPlaceholder('cfgCooldown', cfg.funding && cfg.funding.emergencyTopupCooldownMs);
+    const staleSel = document.getElementById('cfgStalePolicy');
+    if (staleSel && cfg.price && cfg.price.stalePricePolicy) {
+      staleSel.options[0].text = `-- current: ${cfg.price.stalePricePolicy} --`;
+    }
+  } else {
+    if (runtime.buyChance !== undefined) setPlaceholder('cfgBuyChance', runtime.buyChance);
+    if (runtime.sellChance !== undefined) setPlaceholder('cfgSellChance', runtime.sellChance);
+    if (runtime.maxAmount !== undefined) setPlaceholder('cfgMaxAmount', runtime.maxAmount);
+  }
+
+  // Observability totals for overview
+  const t = obs.totals || {};
+  document.getElementById('sv-fails').textContent = fmtNum((t.jobFailures || 0) + (t.actionFailures || 0));
+
+  renderClaimStatus(runtime.claim);
+  renderSystemInfo(data);
+  renderIntegrations(runtime);
+}
+
+function renderIntegrations(runtime) {
+  const integ = (runtime && runtime.integration) || null;
+  const card = document.getElementById('integrationCard');
+  if (!integ) { if (card) card.style.display = 'none'; return; }
+  if (card) card.style.display = '';
+
+  document.getElementById('intBackend').innerHTML = copyableText(integ.dekantBackendUrl);
+  document.getElementById('intPrice').innerHTML = copyableText(integ.priceServiceUrl);
+  document.getElementById('intRpc').innerHTML = copyableText(integ.solanaRpcUrl);
+  document.getElementById('intProgramId').innerHTML = copyableText(integ.dekantProgramId);
+  setText('intProgramSource', integ.programIdSource === 'env' ? 'PROGRAM_ID env override' : 'Bundled IDL address');
+  document.getElementById('intIdlProgramId').innerHTML =
+    integ.idlProgramId ? copyableText(integ.idlProgramId) : '<span class="muted">none in IDL</span>';
+
+  const matchEl = document.getElementById('intProgramMatch');
+  if (!integ.idlProgramId) {
+    matchEl.innerHTML = '<span class="muted">IDL has no address to compare</span>';
+  } else if (integ.idlProgramId === integ.dekantProgramId) {
+    matchEl.innerHTML = '<span class="int-ok">✓ matched</span>';
+  } else {
+    matchEl.innerHTML = '<span class="int-warn">⚠ mismatch — bots use the in-use ID above</span>';
+  }
+}
+
+function setText(id, value, className) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.textContent = (value === undefined || value === null || value === '') ? '--' : value;
+  if (className !== undefined) el.className = 'info-val' + (className ? ' ' + className : '');
+}
+
+function renderChips(id, arr, emptyLabel, copyable) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  if (!arr || !arr.length) {
+    el.innerHTML = `<span class="muted">${escapeHtml(emptyLabel)}</span>`;
+    return;
+  }
+  el.innerHTML = arr.map(raw => {
+    const v = String(raw);
+    const cls = copyable ? 'chip copy-addr' : 'chip';
+    const data = copyable ? ` data-copy="${escapeHtml(v)}"` : '';
+    return `<span class="${cls}"${data} title="${escapeHtml(v)}">${escapeHtml(shortAddr(v))}</span>`;
+  }).join('');
+}
+
+function renderSystemInfo(data) {
+  const runtime = data.runtime || {};
+  const obs = runtime.observability || {};
+  const health = (obs.health || data.status || 'ok');
+
+  setText('sysService', data.service);
+  setText('sysHealth', health.toUpperCase(), health === 'ok' ? 'ok' : '');
+  setText('sysStartedAt', obs.startedAt ? fmtTime(obs.startedAt) : '--');
+  setText('sysUptime', fmtUptime(obs.uptimeMs));
+  setText('sysCreatedBots', runtime.createdBotsOnStartup);
+  setText(
+    'sysInitFunding',
+    runtime.initialFundingScheduled === undefined
+      ? '--'
+      : (runtime.initialFundingScheduled ? 'Scheduled' : 'Not scheduled')
+  );
+
+  const cfg = runtime.config;
+  if (cfg) {
+    const tr = cfg.trading || {};
+    setText('ecChances', `${tr.buyChance ?? '--'}% / ${tr.sellChance ?? '--'}%`);
+    setText('ecMaxAmount', fmtNum(tr.maxAmount));
+    setText('ecPrefund', tr.prefundMultiplier != null ? tr.prefundMultiplier + '×' : '--');
+
+    const fn = cfg.funding || {};
+    setText('ecMinSol', fn.minBotSol != null ? fmtNumFull(fn.minBotSol) + ' SOL' : '--');
+    setText('ecCooldown', fn.emergencyTopupCooldownMs != null ? fmtUptime(fn.emergencyTopupCooldownMs) : '--');
+    renderChips('ecMints', fn.vaultSupportedMints, 'None', true);
+
+    const pr = cfg.price || {};
+    setText('ecStale', pr.stalePricePolicy);
+    renderChips('ecIgnored', cfg.ignoredMarketIds, 'None', false);
+  }
+}
+
+function renderClaimStatus(claim) {
+  const card = document.getElementById('claimCard');
+  if (!card) return;
+  // Hidden unless the server reports claiming is enabled (on-chain client wired).
+  if (!claim || !claim.enabled) { card.style.display = 'none'; return; }
+  card.style.display = '';
+  document.getElementById('claim-claimed').textContent = fmtNum(claim.claimed ?? 0);
+  document.getElementById('claim-pending').textContent = fmtNum(claim.marketsPending ?? 0);
+  document.getElementById('claim-failed').textContent = fmtNum(claim.failed ?? 0);
+
+  const candidates = claim.candidateMarkets ?? 0;
+  const parts = [
+    claim.lastRunAt ? 'Last pass ' + fmtTime(claim.lastRunAt) : 'No pass yet',
+    candidates + ' candidate' + (candidates === 1 ? '' : 's')
+  ];
+  document.getElementById('claimHint').textContent = parts.join(' · ');
+}
+
+function setPlaceholder(id, val) {
+  const el = document.getElementById(id);
+  if (el && val !== undefined && val !== null) el.placeholder = String(val);
+}
+
+/* ────────────────────────────────────────────
+   Stats
+   ──────────────────────────────────────────── */
+async function loadStats(page) {
+  statsPage = page || 1;
+  try {
+    const data = await api('GET', `/admin/stats?page=${statsPage}&page_size=${PAGE_SIZE}`);
+    cachedStatsData = data;
+    renderOverviewFromStats(data);
+    renderStatsTable(data);
+    renderStatsSummary(data);
+  } catch (e) {
+    // stats might not be available yet
+  }
+}
+
+function renderOverviewFromStats(data) {
+  const g = data.global || {};
+  document.getElementById('sv-buys').textContent = fmtNum(g.buyTrades ?? 0);
+  document.getElementById('sv-sells').textContent = fmtNum(g.sellTrades ?? 0);
+  document.getElementById('sv-buyVol').textContent = fmtNum(g.buyVolume ?? 0);
+  document.getElementById('sv-sellVol').textContent = fmtNum(g.sellVolume ?? 0);
+  document.getElementById('sv-lastTrade').textContent = fmtTime(g.lastTradeAt);
+}
+
+function renderStatsSummary(data) {
+  const g = data.global || {};
+  const totalTrades = (g.buyTrades || 0) + (g.sellTrades || 0);
+  const totalVol = (g.buyVolume || 0) + (g.sellVolume || 0);
+  const totalFails = (g.failedBuyActions || 0) + (g.failedSellActions || 0);
+
+  document.getElementById('sum-totalTrades').textContent = fmtNum(totalTrades);
+  document.getElementById('sum-totalVol').textContent = fmtNum(totalVol);
+  document.getElementById('sum-totalFails').textContent = fmtNum(totalFails);
+  document.getElementById('statsSummaryHint').textContent = `${data.totalBots || 0} bots tracked`;
+
+  // "Stats generated" lives in the System & Runtime section but only the stats
+  // endpoint reports it.
+  setText('sysStatsGen', data.generatedAt ? fmtTime(data.generatedAt) : '--');
+}
+
+function renderStatsTable(data) {
+  const body = document.getElementById('statsBody');
+  body.innerHTML = '';
+  (data.items || []).forEach(item => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td class="mono">${escapeHtml(item.botId || '--')}</td>
+      <td class="mono addr">${copyableAddr(item.address)}</td>
+      <td>${fmtNumFull(item.buyTrades)}</td>
+      <td>${fmtNumFull(item.sellTrades)}</td>
+      <td><strong>${fmtNumFull(item.totalTrades)}</strong></td>
+      <td>${fmtNum(item.buyVolume)}</td>
+      <td>${fmtNum(item.sellVolume)}</td>
+      <td><strong>${fmtNum(item.totalVolume)}</strong></td>
+      <td style="color:${item.failedBuyActions ? 'var(--red)' : 'inherit'}">${item.failedBuyActions || 0}</td>
+      <td style="color:${item.failedSellActions ? 'var(--red)' : 'inherit'}">${item.failedSellActions || 0}</td>
+      <td>${fmtTime(item.lastTradeAt)}</td>
+    `;
+    body.appendChild(tr);
+  });
+  document.getElementById('statsPageInfo').textContent =
+    `Page ${data.page} of ${data.totalPages} (${data.totalBots} bots)`;
+  renderPagination('statsPagination', data.page, data.totalPages, p => loadStats(p));
+}
+
+/* ────────────────────────────────────────────
+   Balance Summary (for the summary card)
+   ──────────────────────────────────────────── */
+async function loadBalanceSummary() {
+  try {
+    const data = await api('GET', `/admin/bots/balances?page=1&page_size=100`);
+    cachedBalData = data;
+    renderBalanceSummary(data);
+  } catch (e) {
+    document.getElementById('sum-balBots').textContent = '--';
+    document.getElementById('sum-totalSol').textContent = '--';
+    document.getElementById('sum-avgSol').textContent = '--';
+    document.getElementById('balSummaryHint').textContent = 'Could not load';
+  }
+}
+
+function renderBalanceSummary(data) {
+  const items = data.items || [];
+  const total = data.total || items.length;
+  let totalSol = 0;
+  items.forEach(item => { totalSol += (item.sol || 0); });
+  const avg = items.length > 0 ? totalSol / items.length : 0;
+
+  document.getElementById('sum-balBots').textContent = fmtNum(total);
+  document.getElementById('sum-totalSol').textContent = fmtNum(totalSol);
+  document.getElementById('sum-avgSol').textContent = avg.toFixed(4);
+  document.getElementById('balSummaryHint').textContent = items.length < total
+    ? `Showing ${items.length} of ${total} bots`
+    : `${total} bots loaded`;
+}
+
+/* ────────────────────────────────────────────
+   Balances (Modal)
+   ──────────────────────────────────────────── */
+async function loadBalances(page) {
+  balPage = page || 1;
+  try {
+    const data = await api('GET', `/admin/bots/balances?page=${balPage}&page_size=${PAGE_SIZE}`);
+    renderBalancesTable(data);
+  } catch (e) {
+    document.getElementById('balBody').innerHTML =
+      `<tr><td colspan="4" style="color:var(--text2);text-align:center;padding:20px">${e.message || 'Failed to load'}</td></tr>`;
+  }
+}
+
+function renderBalancesTable(data) {
+  const body = document.getElementById('balBody');
+  body.innerHTML = '';
+  (data.items || []).forEach(item => {
+    const tokens = item.tokens || {};
+    const tokenCount = Object.keys(tokens).length;
+    const tokenStr = tokenCount > 0
+      ? Object.entries(tokens).slice(0, 2).map(([k,v]) => `${escapeHtml(shortAddr(k))}: ${fmtNumFull(v)}`).join(', ')
+        + (tokenCount > 2 ? ` +${tokenCount - 2} more` : '')
+      : '--';
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td class="mono">${escapeHtml(item.botId || '--')}</td>
+      <td class="mono addr">${copyableAddr(item.address)}</td>
+      <td>${fmtNumFull(item.sol)}</td>
+      <td style="font-size:11px">${tokenStr}</td>
+    `;
+    tr.onclick = (e) => {
+      if (e.target.closest('.copy-addr')) return;
+      openBotPopover(item);
+    };
+    body.appendChild(tr);
+  });
+  document.getElementById('balPageInfo').textContent =
+    `Page ${data.page} of ${data.totalPages} (${data.total} bots)`;
+  renderPagination('balPagination', data.page, data.totalPages, p => loadBalances(p));
+}
+
+/* ────────────────────────────────────────────
+   Observability Tab
+   ──────────────────────────────────────────── */
+function renderObservability() {
+  if (!cachedStatus) return;
+  const obs = cachedStatus.runtime?.observability || {};
+  const t = obs.totals || {};
+
+  document.getElementById('obsTotals').innerHTML = `
+    <div class="stat-box"><div class="stat-value accent">${fmtNum(t.jobRuns ?? 0)}</div><div class="stat-label">Job Runs</div></div>
+    <div class="stat-box"><div class="stat-value green">${fmtNum(t.jobSuccesses ?? 0)}</div><div class="stat-label">Successes</div></div>
+    <div class="stat-box"><div class="stat-value red">${fmtNum(t.jobFailures ?? 0)}</div><div class="stat-label">Job Failures</div></div>
+    <div class="stat-box"><div class="stat-value red">${fmtNum(t.actionFailures ?? 0)}</div><div class="stat-label">Action Failures</div></div>
+    <div class="stat-box"><div class="stat-value yellow">${fmtNum(t.knownErrors ?? 0)}</div><div class="stat-label">Known Errors</div></div>
+    <div class="stat-box"><div class="stat-value red">${fmtNum(t.unknownErrors ?? 0)}</div><div class="stat-label">Unknown Errors</div></div>
+  `;
+
+  const jobs = obs.jobs || {};
+  document.getElementById('obsJobs').innerHTML = Object.entries(jobs).map(([name, j]) => `
+    <div class="job-card">
+      <h4>${escapeHtml(name.replace(/_/g, ' '))}</h4>
+      <div class="job-row"><span class="jl">Runs</span><span>${fmtNum(j.runs ?? 0)}</span></div>
+      <div class="job-row"><span class="jl">Successes</span><span style="color:var(--green)">${fmtNum(j.successes ?? 0)}</span></div>
+      <div class="job-row"><span class="jl">Failures</span><span style="color:${j.failures ? 'var(--red)' : 'inherit'}">${fmtNum(j.failures ?? 0)}</span></div>
+      <div class="job-row"><span class="jl">Action Fails</span><span style="color:${j.actionFailures ? 'var(--red)' : 'inherit'}">${fmtNum(j.actionFailures ?? 0)}</span></div>
+      <div class="divider"></div>
+      <div class="job-row"><span class="jl">Last Start</span><span>${fmtTime(j.lastStartedAt)}</span></div>
+      <div class="job-row"><span class="jl">Last Success</span><span>${fmtTime(j.lastSuccessAt)}</span></div>
+      <div class="job-row"><span class="jl">Last Failure</span><span>${fmtTime(j.lastFailureAt)}</span></div>
+      ${j.lastErrorType ? `<div class="divider"></div><div class="job-row error-clickable" onclick="openJobErrorPopover('${escapeHtml(name)}')" title="Click for details"><span class="jl">Error ▸</span><span style="color:var(--red);font-size:10px;max-width:160px;text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(j.lastErrorType)}: ${escapeHtml(j.lastErrorMessage || '')}</span></div>` : ''}
+    </div>
+  `).join('');
+}
+
+/* ────────────────────────────────────────────
+   Error Detail Popover
+   ──────────────────────────────────────────── */
+let errorPopoverJob = null;
+
+function openJobErrorPopover(jobName) {
+  const obs = cachedStatus?.runtime?.observability || {};
+  const j = (obs.jobs || {})[jobName];
+  if (!j) return;
+  errorPopoverJob = jobName;
+
+  const label = jobName.replace(/_/g, ' ');
+  document.getElementById('errorPopoverTitle').textContent = label + ' — Failures & Warnings';
+
+  const rows = [
+    { label: 'Error Type', value: j.lastErrorType, color: 'var(--red)' },
+    { label: 'Message', value: j.lastErrorMessage || '—', color: 'var(--red)', mono: true },
+    { label: 'Last Failure', value: fmtTime(j.lastFailureAt) },
+    { label: 'Total Failures', value: String(j.failures || 0), color: j.failures ? 'var(--red)' : null },
+    { label: 'Action Failures', value: String(j.actionFailures || 0), color: j.actionFailures ? 'var(--red)' : null }
+  ];
+
+  // The summary block only makes sense when the job has actually failed at least once.
+  const lastErrorBlock = j.lastErrorType ? `
+    <div class="pop-subhead">Last error (summary)</div>
+    <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px">
+      ${rows.map(r => `
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;font-size:12px">
+          <span style="color:var(--text2);flex-shrink:0">${escapeHtml(r.label)}</span>
+          <span style="color:${r.color || 'var(--text)'};text-align:right;word-break:break-all;${r.mono ? 'font-family:JetBrains Mono,monospace;font-size:11px;' : ''}">${escapeHtml(String(r.value))}</span>
+        </div>
+      `).join('')}
+    </div>` : '';
+
+  document.getElementById('errorPopoverBody').innerHTML = `
+    ${lastErrorBlock}
+    <div class="pop-subhead" style="display:flex;justify-content:space-between;align-items:center;gap:10px">
+      <span>All failures &amp; warnings for this operation</span>
+      <select id="errorHistFilter" class="pop-filter" onchange="renderJobEventHistory()">
+        <option value="">All</option>
+        <option value="error">Errors</option>
+        <option value="warn">Warnings</option>
+      </select>
+    </div>
+    <div id="errorHistList" class="pop-hist"></div>
+    <div style="margin-top:12px;font-size:10px;color:var(--text2)">
+      From the in-memory event log (most recent ${cachedEvents?.capacity ?? 300}; resets on restart).
+    </div>
+  `;
+
+  renderJobEventHistory();
+  // Lazy-load the event log if a refresh hasn't populated it yet.
+  if (!cachedEvents) {
+    loadEvents(true).then(() => { if (errorPopoverJob === jobName) renderJobEventHistory(); });
+  }
+
+  document.getElementById('errorPopoverOverlay').classList.add('active');
+}
+
+function renderJobEventHistory() {
+  const listEl = document.getElementById('errorHistList');
+  if (!listEl || !errorPopoverJob) return;
+  if (!cachedEvents) {
+    listEl.innerHTML = '<div class="pop-hist-empty">Loading events…</div>';
+    return;
+  }
+
+  const filterEl = document.getElementById('errorHistFilter');
+  const sev = filterEl ? filterEl.value : '';
+  const items = (cachedEvents.entries || []).filter(e => e.job === errorPopoverJob && (!sev || e.severity === sev));
+
+  if (!items.length) {
+    listEl.innerHTML = '<div class="pop-hist-empty">No recorded events for this operation.</div>';
+    return;
+  }
+
+  listEl.innerHTML = items.map(e => {
+    const sevClass = e.severity === 'error' ? 'ev-sev-error' : 'ev-sev-warn';
+    const bot = e.botId
+      ? `<span class="pop-hist-bot copy-addr" data-copy="${escapeHtml(e.botId)}" title="${escapeHtml(e.botId)} — click to copy">${escapeHtml(shortenMiddle(e.botId, 8, 6))}</span>`
+      : '';
+    const market = e.marketId ? `<span class="pop-hist-mk">mkt ${escapeHtml(e.marketId)}</span>` : '';
+    return `<div class="pop-hist-item">
+      <div class="pop-hist-top">
+        <span class="ev-badge ${sevClass}">${escapeHtml(e.severity)}</span>
+        <span class="pop-hist-time">${escapeHtml(fmtTime(e.timestamp))}</span>
+        ${bot}${market}
+      </div>
+      <div class="pop-hist-msg copy-addr" data-copy="${escapeHtml(e.message || '')}" title="Click to copy">${escapeHtml(e.message || '--')}</div>
+    </div>`;
+  }).join('');
+}
+
+function closeErrorPopover() {
+  const overlay = document.getElementById('errorPopoverOverlay');
+  overlay.classList.add('closing');
+  setTimeout(() => overlay.classList.remove('active', 'closing'), 150);
+}
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && document.getElementById('errorPopoverOverlay').classList.contains('active')) {
+    closeErrorPopover();
+  }
+});
+
+/* ────────────────────────────────────────────
+   Pagination Helper
+   ──────────────────────────────────────────── */
+function renderPagination(containerId, current, total, onClick) {
+  const el = document.getElementById(containerId);
+  el.innerHTML = '';
+  if (total <= 1) return;
+
+  const prev = document.createElement('button');
+  prev.className = 'btn sm';
+  prev.textContent = 'Prev';
+  prev.disabled = current <= 1;
+  prev.onclick = () => onClick(current - 1);
+  el.appendChild(prev);
+
+  const info = document.createElement('span');
+  info.textContent = `${current} / ${total}`;
+  el.appendChild(info);
+
+  const next = document.createElement('button');
+  next.className = 'btn sm';
+  next.textContent = 'Next';
+  next.disabled = current >= total;
+  next.onclick = () => onClick(current + 1);
+  el.appendChild(next);
+}
+
+/* ────────────────────────────────────────────
+   Modal
+   ──────────────────────────────────────────── */
+function openModal(tabId) {
+  document.getElementById('modalOverlay').classList.add('active');
+  if (tabId) {
+    const btn = document.querySelector(`.modal-tab[data-tab="${tabId}"]`);
+    if (btn) switchTab(btn);
+  }
+  loadStats(statsPage);
+  loadBalances(balPage);
+  renderObservability();
+}
+function closeModal() {
+  const overlay = document.getElementById('modalOverlay');
+  overlay.classList.add('closing');
+  setTimeout(() => { overlay.classList.remove('active', 'closing'); }, 200);
+}
+function switchTab(btn) {
+  document.querySelectorAll('.modal-tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById(btn.dataset.tab).classList.add('active');
+
+  if (btn.dataset.tab === 'tabBalances') loadBalances(balPage);
+  if (btn.dataset.tab === 'tabObservability') renderObservability();
+}
+
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+
+/* ────────────────────────────────────────────
+   Actions
+   ──────────────────────────────────────────── */
+
+async function forceBuy() {
+  setLoading('btnBuy', true);
+  try {
+    const ids = parseCSV(document.getElementById('marketIdsInput').value);
+    const body = ids.length ? { market_ids: ids } : {};
+    const data = await api('POST', '/admin/bots/buy', body);
+    toast('Buy cycle completed');
+    showResponse('quickResponse', data);
+    loadStats(statsPage);
+  } catch (e) {
+    toast(e.message || 'Buy failed', 'error');
+    showResponse('quickResponse', e.data || { error: e.message });
+  } finally { setLoading('btnBuy', false); }
+}
+
+async function forceSell() {
+  setLoading('btnSell', true);
+  try {
+    const ids = parseCSV(document.getElementById('marketIdsInput').value);
+    const body = ids.length ? { market_ids: ids } : {};
+    const data = await api('POST', '/admin/bots/sell', body);
+    toast('Sell cycle completed');
+    showResponse('quickResponse', data);
+    loadStats(statsPage);
+  } catch (e) {
+    toast(e.message || 'Sell failed', 'error');
+    showResponse('quickResponse', e.data || { error: e.message });
+  } finally { setLoading('btnSell', false); }
+}
+
+async function prefund() {
+  setLoading('btnPrefund', true);
+  try {
+    const data = await api('POST', '/admin/bots/fund', {});
+    toast('Prefund completed');
+    showResponse('quickResponse', data);
+  } catch (e) {
+    toast(e.message || 'Prefund failed', 'error');
+    showResponse('quickResponse', e.data || { error: e.message });
+  } finally { setLoading('btnPrefund', false); }
+}
+
+async function claimPayouts() {
+  setLoading('btnClaim', true);
+  try {
+    const data = await api('POST', '/admin/bots/claim');
+    showResponse('claimResponse', data);
+    const r = data.result || {};
+    if (r.skipped) {
+      toast('Claim pass busy — try again shortly', 'error');
+    } else {
+      toast(`Claim pass: ${r.claimed ?? 0} claimed, ${r.failed ?? 0} failed`);
+    }
+    await loadStatus();
+  } catch (e) {
+    toast(e.message || 'Claim failed', 'error');
+    showResponse('claimResponse', e.data || { error: e.message });
+  } finally { setLoading('btnClaim', false); }
+}
+
+async function addBots() {
+  setLoading('btnAddBots', true);
+  try {
+    const count = parseInt(document.getElementById('addBotCount').value) || 3;
+    const data = await api('POST', '/admin/bots/add', { count });
+    toast(`Added ${count} bots`);
+    showResponse('addBotsResponse', data);
+    cachedBotList = null;
+    loadStatus();
+  } catch (e) {
+    toast(e.message || 'Add bots failed', 'error');
+    showResponse('addBotsResponse', e.data || { error: e.message });
+  } finally { setLoading('btnAddBots', false); }
+}
+
+async function manualFund() {
+  setLoading('btnFund', true);
+  try {
+    const body = {};
+    const botIds = parseCSV(document.getElementById('fundBotIds').value);
+    const addrs = parseCSV(document.getElementById('fundAddresses').value);
+    const amount = parseFloat(document.getElementById('fundAmount').value);
+    const token = document.getElementById('fundToken').value.trim();
+    if (botIds.length) body.bot_ids = botIds;
+    if (addrs.length) body.addresses = addrs;
+    if (!isNaN(amount) && amount > 0) body.amount = amount;
+    if (token) body.token = token;
+
+    const data = await api('POST', '/admin/bots/fund', body);
+    toast('Funding completed');
+    showResponse('fundResponse', data);
+  } catch (e) {
+    toast(e.message || 'Funding failed', 'error');
+    showResponse('fundResponse', e.data || { error: e.message });
+  } finally { setLoading('btnFund', false); }
+}
+
+async function addIgnored() {
+  setLoading('btnIgnoreAdd', true);
+  try {
+    const ids = parseCSV(document.getElementById('ignoredMarketIds').value);
+    if (!ids.length) throw new Error('Enter at least one market ID');
+    const data = await api('POST', '/admin/markets/ignored/add', { market_ids: ids });
+    toast('Markets added to ignore list');
+    showResponse('ignoredResponse', data);
+  } catch (e) {
+    toast(e.message || 'Failed', 'error');
+    showResponse('ignoredResponse', e.data || { error: e.message });
+  } finally { setLoading('btnIgnoreAdd', false); }
+}
+
+async function removeIgnored() {
+  setLoading('btnIgnoreRm', true);
+  try {
+    const ids = parseCSV(document.getElementById('ignoredMarketIds').value);
+    if (!ids.length) throw new Error('Enter at least one market ID');
+    const data = await api('POST', '/admin/markets/ignored/remove', { market_ids: ids });
+    toast('Markets removed from ignore list');
+    showResponse('ignoredResponse', data);
+  } catch (e) {
+    toast(e.message || 'Failed', 'error');
+    showResponse('ignoredResponse', e.data || { error: e.message });
+  } finally { setLoading('btnIgnoreRm', false); }
+}
+
+async function updateConfig() {
+  setLoading('btnCfgUpdate', true);
+  try {
+    const patch = {};
+
+    // Trading
+    const buyChance = parseFloat(document.getElementById('cfgBuyChance').value);
+    const sellChance = parseFloat(document.getElementById('cfgSellChance').value);
+    const maxAmount = parseFloat(document.getElementById('cfgMaxAmount').value);
+    const prefundMul = parseFloat(document.getElementById('cfgPrefundMul').value);
+    const trading = {};
+    if (!isNaN(buyChance)) trading.buyChance = buyChance;
+    if (!isNaN(sellChance)) trading.sellChance = sellChance;
+    if (!isNaN(maxAmount)) trading.maxAmount = maxAmount;
+    if (!isNaN(prefundMul)) trading.prefundMultiplier = prefundMul;
+    if (Object.keys(trading).length) patch.trading = trading;
+
+    // Funding
+    const minSol = parseFloat(document.getElementById('cfgMinSol').value);
+    const cooldown = parseInt(document.getElementById('cfgCooldown').value);
+    const funding = {};
+    if (!isNaN(minSol)) funding.minBotSol = minSol;
+    if (!isNaN(cooldown)) funding.emergencyTopupCooldownMs = cooldown;
+    if (Object.keys(funding).length) patch.funding = funding;
+
+    // Price
+    const stalePolicy = document.getElementById('cfgStalePolicy').value;
+    if (stalePolicy) patch.price = { stalePricePolicy: stalePolicy };
+
+    if (!Object.keys(patch).length) throw new Error('No changes to apply');
+
+    const data = await api('PATCH', '/admin/config', patch);
+    toast('Config updated');
+    showResponse('cfgResponse', data);
+    // Clear inputs after successful update so new placeholders show
+    ['cfgBuyChance','cfgSellChance','cfgMaxAmount','cfgPrefundMul','cfgMinSol','cfgCooldown'].forEach(id => {
+      document.getElementById(id).value = '';
+    });
+    document.getElementById('cfgStalePolicy').value = '';
+    loadStatus();
+  } catch (e) {
+    toast(e.message || 'Config update failed', 'error');
+    showResponse('cfgResponse', e.data || { error: e.message });
+  } finally { setLoading('btnCfgUpdate', false); }
+}
+
+/* ────────────────────────────────────────────
+   Bot Balance Popover
+   ──────────────────────────────────────────── */
+function openBotPopover(item) {
+  const overlay = document.getElementById('botPopoverOverlay');
+  document.getElementById('botPopoverTitle').textContent = `${item.botId || 'Bot'} Balances`;
+  const body = document.getElementById('botPopoverBody');
+  const tokens = item.tokens || {};
+  const entries = Object.entries(tokens);
+
+  let html = '<ul class="token-list">';
+  html += `<li class="token-item sol-row">
+    <span class="token-mint">SOL (native)</span>
+    <span class="token-amount" style="color:var(--yellow)">${fmtNumFull(item.sol)}</span>
+  </li>`;
+  if (entries.length > 0) {
+    entries.forEach(([mint, amount]) => {
+      const safeMint = mint.replace(/[<>"'&]/g, '');
+      html += `<li class="token-item token-row">
+        <span class="token-mint copy-addr" data-copy="${safeMint}" title="Click to copy">${shortAddr(mint)}</span>
+        <span class="token-amount" style="color:var(--purple)">${fmtNumFull(amount)}</span>
+      </li>`;
+    });
+  } else {
+    html += '<li class="token-empty">No token balances</li>';
+  }
+  html += '</ul>';
+
+  if (item.address) {
+    const safeAddr = item.address.replace(/[<>"'&]/g, '');
+    html += `<div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--border);font-size:11px;color:var(--text2)">
+      Address: <span class="copy-addr mono" data-copy="${safeAddr}" title="Click to copy">${item.address}</span>
+    </div>`;
+  }
+
+  body.innerHTML = html;
+  overlay.classList.add('active');
+}
+
+function closeBotPopover() {
+  const overlay = document.getElementById('botPopoverOverlay');
+  overlay.classList.add('closing');
+  setTimeout(() => { overlay.classList.remove('active', 'closing'); }, 150);
+}
+
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeBotPopover(); });
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && document.getElementById('settingsOverlay').classList.contains('active')) {
+    closeSettings();
+  }
+});
+
+/* ────────────────────────────────────────────
+   Entity Picker
+   ──────────────────────────────────────────── */
+// Map picker ID -> target input ID
+const pickerInputMap = {
+  fundBotPicker: 'fundBotIds',
+  marketPicker: 'marketIdsInput',
+  ignoredMarketPicker: 'ignoredMarketIds'
+};
+
+async function fetchBotList() {
+  if (cachedBotList) return cachedBotList;
+  try {
+    const data = await api('GET', '/admin/stats?page=1&page_size=200');
+    cachedBotList = (data.items || []).map(b => ({ id: b.botId, addr: b.address || '' }));
+    return cachedBotList;
+  } catch { return []; }
+}
+
+async function fetchMarketList() {
+  // No direct "list all markets" endpoint. Derive from stats trade data if available,
+  // or show a helpful message. Markets aren't individually exposed via API.
+  if (cachedMarketList) return cachedMarketList;
+  // Try to get market info from cached status response (ignoredMarketIds at least)
+  const ignored = cachedStatus?.runtime?.observability?.jobs || {};
+  // The backend doesn't expose market list. Return empty — the picker will show a hint.
+  cachedMarketList = [];
+  return cachedMarketList;
+}
+
+function togglePicker(pickerId, entityType) {
+  const dropdown = document.getElementById(pickerId);
+  // Close all other pickers
+  document.querySelectorAll('.picker-dropdown.active').forEach(d => {
+    if (d.id !== pickerId) d.classList.remove('active');
+  });
+  if (dropdown.classList.contains('active')) {
+    dropdown.classList.remove('active');
+    return;
+  }
+  populatePicker(pickerId, entityType);
+  dropdown.classList.add('active');
+}
+
+async function populatePicker(pickerId, entityType) {
+  const dropdown = document.getElementById(pickerId);
+  const inputId = pickerInputMap[pickerId];
+  const input = document.getElementById(inputId);
+  const currentValues = new Set(parseCSV(input.value));
+
+  if (entityType === 'bot') {
+    dropdown.innerHTML = '<div style="padding:12px;text-align:center;color:var(--text2);font-size:11px">Loading bots...</div>';
+    const bots = await fetchBotList();
+    if (bots.length === 0) {
+      dropdown.innerHTML = '<div style="padding:12px;text-align:center;color:var(--text2);font-size:11px">No bots found</div>';
+      return;
+    }
+    let html = '<div class="picker-search"><input placeholder="Search bots..." oninput="filterPicker(this)"></div>';
+    bots.forEach(bot => {
+      const sel = currentValues.has(bot.id) ? ' selected' : '';
+      html += `<div class="picker-item${sel}" data-entity-id="${bot.id}" onclick="pickEntity('${pickerId}','${bot.id}')">
+        <span><span class="picker-id">${bot.id}</span> <span class="picker-addr">${shortAddr(bot.addr)}</span></span>
+        <span class="picker-check">+</span>
+      </div>`;
+    });
+    dropdown.innerHTML = html;
+  } else {
+    // Market picker — no API to list markets, so show text input hint
+    dropdown.innerHTML = `<div style="padding:12px;text-align:center;color:var(--text2);font-size:11px;line-height:1.5">
+      No market listing endpoint available.<br>
+      Enter market IDs manually, or paste from<br>
+      the Dekant backend.
+    </div>`;
+  }
+}
+
+function filterPicker(searchInput) {
+  const term = searchInput.value.toLowerCase();
+  const items = searchInput.closest('.picker-dropdown').querySelectorAll('.picker-item');
+  items.forEach(item => {
+    const id = item.dataset.entityId.toLowerCase();
+    item.style.display = id.includes(term) ? '' : 'none';
+  });
+}
+
+function pickEntity(pickerId, entityId) {
+  const inputId = pickerInputMap[pickerId];
+  const input = document.getElementById(inputId);
+  const current = parseCSV(input.value);
+  const idx = current.indexOf(entityId);
+  if (idx >= 0) {
+    current.splice(idx, 1);
+  } else {
+    current.push(entityId);
+  }
+  input.value = current.join(', ');
+
+  // Toggle selected class on the item
+  const dropdown = document.getElementById(pickerId);
+  const item = dropdown.querySelector(`[data-entity-id="${entityId}"]`);
+  if (item) item.classList.toggle('selected');
+}
+
+// Close pickers on outside click
+document.addEventListener('click', e => {
+  if (!e.target.closest('.input-with-picker')) {
+    document.querySelectorAll('.picker-dropdown.active').forEach(d => d.classList.remove('active'));
+  }
+});
+
+/* ────────────────────────────────────────────
+   Bot Keys (encrypted export + client-side decrypt)
+   ──────────────────────────────────────────── */
+// Raw server response: { kdf:{hash,iterations,salt}, bots:[{id,publicKey,encryptedSecretKey}] }.
+let cachedBotKeys = null;
+// botId -> decrypted secret key. Lives only in memory while the panel is open.
+let decryptedSecrets = {};
+
+function b64ToBytes(b64) {
+  const bin = atob(b64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return bytes;
+}
+
+async function loadBotKeys() {
+  setLoading('btnLoadKeys', true);
+  try {
+    const data = await api('GET', '/admin/bots/keys');
+    cachedBotKeys = data;
+    decryptedSecrets = {};
+    renderBotKeys();
+    toast(`Loaded ${data.bots.length} bot key(s) — enter the reversed secret to decrypt`);
+  } catch (e) {
+    toast('Failed to load keys: ' + e.message, 'error');
+  } finally {
+    setLoading('btnLoadKeys', false);
+  }
+}
+
+function renderBotKeys() {
+  const box = document.getElementById('botKeysList');
+  if (!cachedBotKeys || !cachedBotKeys.bots || !cachedBotKeys.bots.length) {
+    box.innerHTML = '<div class="keys-empty">No keys loaded.</div>';
+    return;
+  }
+  box.innerHTML = cachedBotKeys.bots.map(b => {
+    const secret = decryptedSecrets[b.id];
+    // Public key: shown in full, click-to-copy. Private key: locked until decrypted,
+    // then shown shortened (still click-to-copy the full secret). Both copyable.
+    const pubVal = `<span class="key-fval copy-addr" data-copy="${escapeHtml(b.publicKey)}" title="${escapeHtml(b.publicKey)} — click to copy">${escapeHtml(b.publicKey)}</span>`;
+    const privVal = secret
+      ? `<span class="key-fval copy-addr" data-copy="${escapeHtml(secret)}" title="Click to copy full private key">${escapeHtml(shortenMiddle(secret, 10, 8))} <span class="key-copy-hint">copy</span></span>`
+      : '<span class="key-fval locked-val">•••••••••••••••• locked</span>';
+    return `<div class="key-row">
+      <div class="key-head">
+        <span class="key-uuid copy-addr" data-copy="${escapeHtml(b.id)}" title="${escapeHtml(b.id)} — click to copy">${escapeHtml(shortenMiddle(b.id, 8, 6))}</span>
+        <span class="key-hlabel">Bot ID</span>
+      </div>
+      <div class="key-field">
+        <span class="key-tag">pub</span>
+        ${pubVal}
+      </div>
+      <div class="key-field">
+        <span class="key-tag priv">priv</span>
+        ${privVal}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function decryptBotKeys() {
+  if (!cachedBotKeys) { toast('Load keys first', 'error'); return; }
+  const pass = document.getElementById('keysDecryptSecret').value;
+  if (!pass) { toast('Enter the decryption secret', 'error'); return; }
+  setLoading('btnDecryptKeys', true);
+  try {
+    const { kdf, bots } = cachedBotKeys;
+    const baseKey = await crypto.subtle.importKey(
+      'raw', new TextEncoder().encode(pass), 'PBKDF2', false, ['deriveKey']
+    );
+    const aesKey = await crypto.subtle.deriveKey(
+      { name: 'PBKDF2', salt: b64ToBytes(kdf.salt), iterations: kdf.iterations, hash: kdf.hash },
+      baseKey,
+      { name: 'AES-GCM', length: 256 },
+      false,
+      ['decrypt']
+    );
+    const out = {};
+    let failures = 0;
+    for (const b of bots) {
+      try {
+        const blob = b64ToBytes(b.encryptedSecretKey);
+        const iv = blob.slice(0, 12);
+        const data = blob.slice(12); // ciphertext + 16-byte auth tag, as WebCrypto expects
+        const plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, aesKey, data);
+        out[b.id] = new TextDecoder().decode(plain);
+      } catch { failures++; }
+    }
+    decryptedSecrets = out;
+    renderBotKeys();
+    const ok = Object.keys(out).length;
+    if (!ok) toast('Decryption failed — wrong secret?', 'error');
+    else if (failures) toast(`Decrypted ${ok}, ${failures} failed`, 'error');
+    else toast(`Decrypted ${ok} key(s)`);
+  } catch (e) {
+    toast('Decrypt error: ' + e.message, 'error');
+  } finally {
+    setLoading('btnDecryptKeys', false);
+  }
+}
+
+function hideBotKeys() {
+  decryptedSecrets = {};
+  const inp = document.getElementById('keysDecryptSecret');
+  if (inp) inp.value = '';
+  renderBotKeys();
+}
+
+/* ────────────────────────────────────────────
+   Auto-Refresh
+   ──────────────────────────────────────────── */
+let autoRefreshTimer = null;
+let autoCountdownVal = 0;
+let countdownTimer = null;
+
+function stopAutoRefresh() {
+  if (autoRefreshTimer) clearInterval(autoRefreshTimer);
+  if (countdownTimer) clearInterval(countdownTimer);
+  autoRefreshTimer = null;
+  countdownTimer = null;
+  const btn = document.getElementById('btnAutoRefresh');
+  if (btn) btn.classList.remove('auto-active');
+  const cd = document.getElementById('autoCountdown');
+  if (cd) cd.textContent = '';
+}
+
+function startAutoRefresh() {
+  stopAutoRefresh();
+  const interval = settings.refreshInterval > 0 ? settings.refreshInterval : 30;
+  autoCountdownVal = interval;
+  document.getElementById('autoCountdown').textContent = interval + 's';
+  countdownTimer = setInterval(() => {
+    autoCountdownVal--;
+    if (autoCountdownVal > 0) {
+      document.getElementById('autoCountdown').textContent = autoCountdownVal + 's';
+    }
+  }, 1000);
+  autoRefreshTimer = setInterval(() => {
+    autoCountdownVal = interval;
+    refreshAll();
+  }, interval * 1000);
+  document.getElementById('btnAutoRefresh').classList.add('auto-active');
+}
+
+function toggleAutoRefresh() {
+  if (autoRefreshTimer) stopAutoRefresh();
+  else startAutoRefresh();
+}
+
+// Re-apply the interval live when settings change mid-session.
+function restartAutoRefreshIfActive() {
+  if (autoRefreshTimer) startAutoRefresh();
+}
+
+/* ────────────────────────────────────────────
+   Settings modal
+   ──────────────────────────────────────────── */
+function fillBotUrlSelect() {
+  const sel = document.getElementById('setBotUrlSelect');
+  sel.innerHTML = settings.botUrls.map(u =>
+    `<option value="${escapeHtml(u)}"${u === settings.botUrl ? ' selected' : ''}>${escapeHtml(u)}</option>`
+  ).join('');
+}
+
+function openSettings() {
+  fillBotUrlSelect();
+  document.getElementById('setAdminSecret').value = settings.adminSecret || '';
+  document.getElementById('setAdminSecret').type = 'password';
+  document.getElementById('setRefreshInterval').value = settings.refreshInterval || 30;
+  document.getElementById('setAutoStart').checked = !!settings.autoStart;
+  document.getElementById('setCompactBots').checked = !!settings.compactBots;
+  document.getElementById('setCompactMsgs').checked = !!settings.compactMsgs;
+  document.getElementById('setProxyHint').textContent = PROXY_MODE
+    ? 'Requests route through panel-server.mjs; the active URL is sent per request — switch servers without a restart.'
+    : 'Opened without panel-server.mjs — requests go directly to the active URL (the bot must allow CORS).';
+  document.getElementById('settingsOverlay').classList.add('active');
+}
+
+function closeSettings() {
+  const ov = document.getElementById('settingsOverlay');
+  ov.classList.add('closing');
+  setTimeout(() => ov.classList.remove('active', 'closing'), 150);
+}
+
+function onSelectBotUrl() { /* selection is committed on Save */ }
+
+function addBotUrl() {
+  const input = document.getElementById('setBotUrlNew');
+  const url = (input.value || '').trim().replace(/\/+$/, '');
+  if (!url) { toast('Enter a URL', 'error'); return; }
+  try { new URL(url); } catch { toast('Invalid URL', 'error'); return; }
+  const sel = document.getElementById('setBotUrlSelect');
+  if (![...sel.options].some(o => o.value === url)) {
+    const opt = document.createElement('option');
+    opt.value = url; opt.textContent = url;
+    sel.appendChild(opt);
+  }
+  sel.value = url;
+  input.value = '';
+  toast('Added — click Save to apply');
+}
+
+function removeBotUrl() {
+  const sel = document.getElementById('setBotUrlSelect');
+  if (sel.options.length <= 1) { toast('Keep at least one URL', 'error'); return; }
+  sel.remove(sel.selectedIndex);
+  sel.selectedIndex = 0;
+}
+
+function toggleSecretVisible(id, btn) {
+  const el = document.getElementById(id);
+  if (el.type === 'password') { el.type = 'text'; btn.textContent = 'Hide'; }
+  else { el.type = 'password'; btn.textContent = 'Show'; }
+}
+
+function applyEventLogDefaults() {
+  const sb = document.getElementById('evShortBots');
+  const sm = document.getElementById('evShortMsgs');
+  if (sb) sb.checked = !!settings.compactBots;
+  if (sm) sm.checked = !!settings.compactMsgs;
+}
+
+function saveSettingsFromModal() {
+  const sel = document.getElementById('setBotUrlSelect');
+  const urls = [...sel.options].map(o => o.value);
+  const interval = parseInt(document.getElementById('setRefreshInterval').value, 10);
+  const secret = document.getElementById('setAdminSecret').value;
+
+  settings.botUrls = urls.length ? urls : [DEFAULT_BOT_URL];
+  settings.botUrl = sel.value || settings.botUrls[0];
+  settings.adminSecret = secret || DEFAULT_ADMIN_SECRET;
+  settings.refreshInterval = interval > 0 ? interval : 30;
+  settings.autoStart = document.getElementById('setAutoStart').checked;
+  settings.compactBots = document.getElementById('setCompactBots').checked;
+  settings.compactMsgs = document.getElementById('setCompactMsgs').checked;
+  saveSettings();
+
+  applyEventLogDefaults();
+  if (typeof renderEvents === 'function') renderEvents();
+  restartAutoRefreshIfActive();
+  closeSettings();
+  toast('Settings saved');
+  refreshAll();
+}
+
+/* ────────────────────────────────────────────
+   Event Log (errors & warnings, client-side filter/sort/group)
+   ──────────────────────────────────────────── */
+async function loadEvents(silent) {
+  setLoading('btnLoadEvents', true);
+  try {
+    const data = await api('GET', '/admin/events');
+    cachedEvents = data;
+    document.getElementById('evCapacity').textContent = data.capacity ?? 300;
+    populateEventFilters(data.entries || []);
+    renderEvents();
+  } catch (e) {
+    // Secondary panel — fail quietly during auto-refresh, surface on manual click.
+    if (!silent) toast(e.message || 'Failed to load events', 'error');
+  } finally {
+    setLoading('btnLoadEvents', false);
+  }
+}
+
+function fillEventSelect(id, values) {
+  const sel = document.getElementById(id);
+  if (!sel) return;
+  const current = sel.value;
+  sel.innerHTML = '<option value="">All</option>' +
+    values.map(v => `<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join('');
+  if (values.includes(current)) sel.value = current; // preserve selection across refresh
+}
+
+function populateEventFilters(entries) {
+  const jobs = [...new Set(entries.map(e => e.job).filter(Boolean))].sort();
+  const bots = [...new Set(entries.map(e => e.botId).filter(Boolean))].sort();
+  fillEventSelect('evFilterJob', jobs);
+  fillEventSelect('evFilterBot', bots);
+}
+
+function sortEvents(key) {
+  if (evSort.key === key) {
+    evSort.dir = evSort.dir === 'asc' ? 'desc' : 'asc';
+  } else {
+    evSort.key = key;
+    evSort.dir = key === 'time' ? 'desc' : 'asc';
+  }
+  renderEvents();
+}
+
+function eventRowHtml(e, opts) {
+  opts = opts || {};
+  const sevClass = e.severity === 'error' ? 'ev-sev-error' : 'ev-sev-warn';
+
+  const botCell = e.botId
+    ? `<span class="copy-addr" data-copy="${escapeHtml(e.botId)}" title="${escapeHtml(e.botId)} — click to copy">${escapeHtml(opts.shortBots ? shortenMiddle(e.botId, 8, 6) : e.botId)}</span>`
+    : '<span class="muted">--</span>';
+
+  const msg = e.message || '';
+  const msgShown = opts.shortMsgs ? shortenMiddle(msg, 48, 28) : msg;
+  const msgCell = msg
+    ? `<span class="copy-addr ev-msg-copy" data-copy="${escapeHtml(msg)}" title="${escapeHtml(msg)} — click to copy">${escapeHtml(msgShown)}</span>`
+    : '<span class="muted">--</span>';
+
+  return `<tr>
+    <td class="ev-time">${escapeHtml(fmtTime(e.timestamp))}</td>
+    <td><span class="ev-badge ${sevClass}">${escapeHtml(e.severity)}</span></td>
+    <td>${escapeHtml(e.job || '--')}</td>
+    <td>${botCell}</td>
+    <td>${e.marketId ? escapeHtml(e.marketId) : '<span class="muted">--</span>'}</td>
+    <td>${e.errorType ? escapeHtml(e.errorType) : '<span class="muted">--</span>'}</td>
+    <td class="ev-event">${escapeHtml(e.event || '--')}</td>
+    <td class="ev-msg ${opts.shortMsgs ? 'ev-msg-compact' : ''}">${msgCell}</td>
+  </tr>`;
+}
+
+function renderEvents() {
+  const body = document.getElementById('eventsBody');
+  const meta = document.getElementById('evMeta');
+  if (!body || !meta) return;
+  if (!cachedEvents) {
+    body.innerHTML = '<tr><td colspan="8" class="ev-empty">No events loaded.</td></tr>';
+    meta.textContent = 'No events loaded.';
+    return;
+  }
+
+  const all = cachedEvents.entries || [];
+  const sev = document.getElementById('evFilterSeverity').value;
+  const job = document.getElementById('evFilterJob').value;
+  const bot = document.getElementById('evFilterBot').value;
+  const search = document.getElementById('evFilterSearch').value.trim().toLowerCase();
+  const groupBy = document.getElementById('evGroupBy').value;
+  const opts = {
+    shortBots: document.getElementById('evShortBots').checked,
+    shortMsgs: document.getElementById('evShortMsgs').checked
+  };
+
+  let entries = all.filter(e =>
+    (!sev || e.severity === sev) &&
+    (!job || e.job === job) &&
+    (!bot || e.botId === bot) &&
+    (!search || (e.message || '').toLowerCase().includes(search) || (e.event || '').toLowerCase().includes(search))
+  );
+
+  entries.sort((a, b) => {
+    const av = evSort.key === 'time' ? a.id : (a[evSort.key] || '');
+    const bv = evSort.key === 'time' ? b.id : (b[evSort.key] || '');
+    if (av < bv) return evSort.dir === 'asc' ? -1 : 1;
+    if (av > bv) return evSort.dir === 'asc' ? 1 : -1;
+    return 0;
+  });
+
+  const dropped = cachedEvents.dropped ? ` · ${cachedEvents.dropped} older evicted` : '';
+  meta.innerHTML = `Showing <strong>${entries.length}</strong> of ${all.length} events${dropped}`;
+
+  if (!entries.length) {
+    body.innerHTML = '<tr><td colspan="8" class="ev-empty">No events match the current filters.</td></tr>';
+    return;
+  }
+
+  if (groupBy) {
+    const groups = {};
+    for (const e of entries) {
+      const key = groupBy === 'bot' ? (e.botId || '(none)')
+        : groupBy === 'job' ? (e.job || '(none)')
+        : e.severity;
+      (groups[key] ??= []).push(e);
+    }
+    body.innerHTML = Object.keys(groups).sort().map(k =>
+      `<tr class="ev-group"><td colspan="8">${escapeHtml(k)}<span class="ev-group-count">${groups[k].length}</span></td></tr>` +
+      groups[k].map(e => eventRowHtml(e, opts)).join('')
+    ).join('');
+  } else {
+    body.innerHTML = entries.map(e => eventRowHtml(e, opts)).join('');
+  }
+}
+
+/* ────────────────────────────────────────────
+   Keyboard Shortcuts
+   ──────────────────────────────────────────── */
+document.addEventListener('keydown', e => {
+  // Skip if user is typing in a form field
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
+  if (e.key === 'r' && !e.ctrlKey && !e.metaKey) { e.preventDefault(); refreshAll(); }
+  if (e.key === 'a' && !e.ctrlKey && !e.metaKey) { e.preventDefault(); toggleAutoRefresh(); }
+});
+
+/* ────────────────────────────────────────────
+   Init
+   ──────────────────────────────────────────── */
+applyEventLogDefaults();           // seed event-log compact toggles from saved settings
+refreshAll().then(() => {
+  if (settings.autoStart) startAutoRefresh();
+});
+</script>
+</body>
+</html>
