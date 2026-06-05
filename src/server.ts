@@ -44,7 +44,7 @@ import {
   SellEngineIntervalProvider,
   SellEnginePriceClient
 } from "./trading/sell-engine.js";
-import { ClaimClient, runClaimPass } from "./trading/claim-engine.js";
+import { ClaimClient, ClaimPassResult, runClaimPass } from "./trading/claim-engine.js";
 
 dotenv.config({ quiet: true });
 
@@ -334,6 +334,13 @@ export async function createInitializedApp(
   const balanceClient = options.funding?.balances ?? null;
   const statsStore = new TradeStatsStore();
 
+  // Serializes the DB writes so concurrent callers (admin PATCH /config,
+  // ignored-market edits, and the market-refresh mint sync) can't let an older
+  // saveRuntimeConfig land after a newer one and leave the persisted row stale
+  // relative to the in-memory state. The in-memory merge below is already atomic
+  // (synchronous, no await between read and assignment); only the awaited save
+  // needed ordering.
+  let runtimeConfigWriteQueue: Promise<void> = Promise.resolve();
   const persistRuntimeConfig = async (nextConfig: (typeof state.runtimeConfig)["config"]) => {
     const validatedConfig = runtimeConfigSchema.parse(nextConfig);
     state.runtimeConfig = {
@@ -341,7 +348,19 @@ export async function createInitializedApp(
       updatedAt: now().toISOString(),
       config: validatedConfig
     };
-    await state.store.saveRuntimeConfig(state.runtimeConfig);
+    const snapshot = state.runtimeConfig;
+    const prior = runtimeConfigWriteQueue;
+    const run = (async () => {
+      // A prior failed save must not block this one, but order is preserved.
+      try {
+        await prior;
+      } catch {
+        /* surfaced to that call's own awaiter */
+      }
+      await state.store.saveRuntimeConfig(snapshot);
+    })();
+    runtimeConfigWriteQueue = run.catch(() => {});
+    await run;
   };
 
   const addIgnoredMarketIds = async (ids: string[]) => {
@@ -677,13 +696,17 @@ export async function createInitializedApp(
   };
 
   let claimPassRunning = false;
-  const runClaimPassSafe = async (activeMarkets: Array<{ id: string }>) => {
+  let lastClaimResult: ClaimPassResult | null = null;
+  let lastClaimRunAt: string | null = null;
+  const runClaimPassSafe = async (
+    activeMarkets: Array<{ id: string }>
+  ): Promise<ClaimPassResult | null> => {
     // Guard against overlap if a refresh fires while a slow claim pass is still
     // going. Overlap would only be wasteful (the on-chain `claimed` flag makes it
     // safe), but skipping is cleaner. Never throws — claim issues must not break
     // the market-refresh job.
     if (!options.claim || claimPassRunning) {
-      return;
+      return null;
     }
     claimPassRunning = true;
     try {
@@ -711,19 +734,42 @@ export async function createInitializedApp(
             error: event.error instanceof Error ? event.error.message : String(event.error)
           })
       });
+      lastClaimResult = result;
+      lastClaimRunAt = now().toISOString();
       if (result.claimed > 0 || result.failed > 0 || result.pruned > 0) {
         safeInfo(logger, "claim_pass_completed", { ...result });
       }
+      return result;
     } catch (error) {
       safeWarn(logger, "claim_pass_error", {
         error: error instanceof Error ? error.message : String(error)
       });
+      return null;
     } finally {
       claimPassRunning = false;
     }
   };
 
+  let marketRefreshRunning = false;
   const runMarketRefresh = async () => {
+    if (!marketCache) {
+      throw new Error("market_cache_unavailable");
+    }
+    // Skip if a previous refresh (which also runs the mint-sync config write and
+    // the claim pass) is still in flight, so a slow refresh can't overlap its own
+    // next tick. Mirrors the buy/sell/claim busy guards.
+    if (marketRefreshRunning) {
+      return { updated: false, count: marketCache.getSnapshot().markets.length, error: "market_refresh_busy" };
+    }
+    marketRefreshRunning = true;
+    try {
+      return await runMarketRefreshInner();
+    } finally {
+      marketRefreshRunning = false;
+    }
+  };
+
+  const runMarketRefreshInner = async () => {
     if (!marketCache) {
       throw new Error("market_cache_unavailable");
     }
@@ -1080,7 +1126,23 @@ export async function createInitializedApp(
       maxAmount: state.runtimeConfig.config.trading.maxAmount,
       createdBotsOnStartup: reconciliation.createdBots.length,
       initialFundingScheduled: fundingSchedule.scheduled,
-      observability: runtimeMonitor.getSnapshot()
+      // Full effective runtime config so the panel can show current values for
+      // every config field (not just buy/sell/max) and the supported-mint /
+      // ignored-market lists. Read-only snapshot; mutate via PATCH /admin/config.
+      config: state.runtimeConfig.config,
+      observability: runtimeMonitor.getSnapshot(),
+      claim: options.claim
+        ? {
+            enabled: true,
+            lastRunAt: lastClaimRunAt,
+            candidateMarkets: lastClaimResult?.candidateMarkets ?? 0,
+            marketsResolved: lastClaimResult?.marketsResolved ?? 0,
+            marketsPending: lastClaimResult?.marketsPending ?? 0,
+            claimed: lastClaimResult?.claimed ?? 0,
+            pruned: lastClaimResult?.pruned ?? 0,
+            failed: lastClaimResult?.failed ?? 0
+          }
+        : undefined
     }),
     {
       forceBuy: buyEngine
@@ -1097,6 +1159,13 @@ export async function createInitializedApp(
               marketIds: input.marketIds
             })
         : undefined,
+      forceClaim:
+        options.claim && marketCache
+          ? async () => {
+              const result = await runClaimPassSafe(marketCache.getSnapshot().markets);
+              return result ?? { skipped: true, reason: "claim_pass_busy" };
+            }
+          : undefined,
       getStats: async (input: { page: number; pageSize: number }) =>
         statsStore.getSummary({
           page: input.page,
@@ -1144,6 +1213,16 @@ export async function createInitializedApp(
     stopMarketLoop();
     stopFundingLoop();
     fundingSchedule.cancel();
+    // Drain queued position-memory writes (recorded fire-and-forget on each buy
+    // and on claim pruning) before tearing down the DB connection, so a SIGTERM
+    // mid-write doesn't lose a bot's center/spread or a claim prune.
+    try {
+      await positionMemory.flush();
+    } catch (error) {
+      safeWarn(logger, "position_memory_flush_failed", {
+        error: error instanceof Error ? error.message : String(error)
+      });
+    }
     await state.store.close();
   });
 
@@ -1400,6 +1479,15 @@ async function start(): Promise<void> {
   };
   process.on("SIGTERM", () => void shutdown("SIGTERM"));
   process.on("SIGINT", () => void shutdown("SIGINT"));
+
+  // Defense-in-depth: loop bodies already catch their own errors, but log any
+  // stray unhandled rejection instead of letting it crash the process silently.
+  process.on("unhandledRejection", (reason) => {
+    startupLogger.error?.("unhandled_rejection", {
+      reason: reason instanceof Error ? reason.message : String(reason),
+      stack: reason instanceof Error ? reason.stack : undefined
+    });
+  });
 
   await appCtx.markets?.start({ immediate: true });
   // If a fresh-bot initial-funding flow is scheduled it will handle the first

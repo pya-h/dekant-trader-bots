@@ -82,6 +82,10 @@ export async function runClaimPass(deps: ClaimPassDeps): Promise<ClaimPassResult
   for (const marketId of candidateMarketIds) {
     const botPubkeys = deps.positionMemory.botPubkeysForMarket(marketId);
     let marketPending = false;
+    // True once any on-chain outcome confirms the market is resolved (a successful
+    // claim or a terminal AlreadyClaimed/NothingToClaim). Without this, a market
+    // where every claim merely failed transiently would be miscounted as resolved.
+    let confirmedResolved = false;
 
     for (const botPubkey of botPubkeys) {
       const botId = botIdByPubkey.get(botPubkey);
@@ -97,6 +101,7 @@ export async function runClaimPass(deps: ClaimPassDeps): Promise<ClaimPassResult
         deps.positionMemory.delete(botPubkey, marketId);
         result.claimed += 1;
         result.pruned += 1;
+        confirmedResolved = true;
         deps.onClaim?.({ botId, botPubkey, marketId, txId });
       } catch (error) {
         const kind = classifyClaimError(error);
@@ -109,6 +114,7 @@ export async function runClaimPass(deps: ClaimPassDeps): Promise<ClaimPassResult
         if (kind === "terminal") {
           deps.positionMemory.delete(botPubkey, marketId);
           result.pruned += 1;
+          confirmedResolved = true;
           deps.onTerminal?.({ botId, botPubkey, marketId, error });
         } else {
           result.failed += 1;
@@ -117,10 +123,13 @@ export async function runClaimPass(deps: ClaimPassDeps): Promise<ClaimPassResult
       }
     }
 
-    if (marketPending) {
-      result.marketsPending += 1;
-    } else {
+    // Only count a market as resolved when an on-chain outcome confirmed it.
+    // Markets seen as not-resolved, or where every attempt failed transiently
+    // (so resolution is unconfirmed), are reported as pending for a later pass.
+    if (!marketPending && confirmedResolved) {
       result.marketsResolved += 1;
+    } else {
+      result.marketsPending += 1;
     }
   }
 

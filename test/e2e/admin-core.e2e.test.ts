@@ -224,6 +224,12 @@ describe("admin core endpoints", () => {
 
     expect(statusResponse.status).toBe(200);
     expect(statusResponse.body.runtime.buyChance).toBe(44);
+    // The full effective runtime config is exposed for the panel (not just the
+    // three legacy top-level fields), reloaded from the persisted patch.
+    expect(statusResponse.body.runtime.config.trading.buyChance).toBe(44);
+    expect(statusResponse.body.runtime.config.funding.minBotSol).toBe(0.02);
+    expect(statusResponse.body.runtime.config).toHaveProperty("price");
+    expect(statusResponse.body.runtime.config).toHaveProperty("ignoredMarketIds");
 
     await second.app.close();
   });

@@ -6,6 +6,17 @@ import { AppConfig } from "./config.js";
 import type { BotKeyExport } from "./security/key-export.js";
 import type { StructuredLogger } from "./observability/logger.js";
 
+type ClaimStatusSnapshot = {
+  enabled: boolean;
+  lastRunAt: string | null;
+  candidateMarkets: number;
+  marketsResolved: number;
+  marketsPending: number;
+  claimed: number;
+  pruned: number;
+  failed: number;
+};
+
 type StatusRuntimeSnapshot = {
   botCount: number;
   buyChance: number;
@@ -17,6 +28,13 @@ type StatusRuntimeSnapshot = {
     health?: string;
     [key: string]: unknown;
   };
+  config?: {
+    trading?: { buyChance?: number; sellChance?: number; maxAmount?: number; prefundMultiplier?: number };
+    funding?: { emergencyTopupCooldownMs?: number; minBotSol?: number; vaultSupportedMints?: string[] };
+    price?: { stalePricePolicy?: string };
+    ignoredMarketIds?: string[];
+  };
+  claim?: ClaimStatusSnapshot;
 };
 
 type RuntimeSnapshotInput = StatusRuntimeSnapshot | (() => StatusRuntimeSnapshot | null);
@@ -42,6 +60,7 @@ type StatsPage = {
 type AdminHandlers = {
   forceBuy?: (input: { marketIds?: string[] }) => Promise<unknown>;
   forceSell?: (input: { marketIds?: string[] }) => Promise<unknown>;
+  forceClaim?: () => Promise<unknown>;
   addBots?: (input: { count: number }) => Promise<unknown>;
   manualFund?: (input: {
     botIds?: string[];
@@ -210,12 +229,7 @@ export function buildApp(
 
       adminScope.get("/status", async () => {
         const runtime = resolveRuntimeSnapshot();
-        const status =
-          runtime?.observability?.health === "degraded"
-            ? "degraded"
-            : runtime?.observability?.health === "ok"
-              ? "ok"
-              : "ok";
+        const status = runtime?.observability?.health === "degraded" ? "degraded" : "ok";
 
         return {
           status,
@@ -346,6 +360,20 @@ export function buildApp(
         return {
           status: "ok",
           cycle
+        };
+      });
+
+      // Manually trigger a claim pass (otherwise it runs automatically on each
+      // market refresh). No body — it acts on all current claim candidates.
+      adminScope.post("/bots/claim", async (request, reply) => {
+        if (!adminHandlers.forceClaim) {
+          return reply.code(503).send({ error: "claim_unavailable" });
+        }
+
+        const result = await adminHandlers.forceClaim();
+        return {
+          status: "ok",
+          result
         };
       });
 
