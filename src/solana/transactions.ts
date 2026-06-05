@@ -35,6 +35,24 @@ export class OutOfRangeError extends Error {
   }
 }
 
+/** On-chain `Market.state` value meaning the outcome is finalized and claimable (constants.rs STATE_RESOLVED). */
+const MARKET_STATE_RESOLVED = 3;
+
+/**
+ * Thrown by {@link executeClaimPayout} when a market is not yet resolved (still
+ * active / pending resolution). The caller should leave the position in place and
+ * retry on a later pass — it is NOT a terminal condition. Distinct from a
+ * SimulationError so the claim engine can keep, rather than prune, the entry.
+ */
+export class MarketNotResolvedError extends Error {
+  readonly marketState: number;
+  constructor(marketState: number) {
+    super(`market_not_resolved:${marketState}`);
+    this.name = "MarketNotResolvedError";
+    this.marketState = marketState;
+  }
+}
+
 export class SimulationError extends Error {
   readonly logs?: string[];
   readonly anchorAccount?: string;
@@ -568,4 +586,54 @@ export async function executeSellDistribution(
       })
     : undefined;
   return { txId, impact };
+}
+
+export type ClaimResult = { txId: string };
+
+/**
+ * Claim a bot's payout from a RESOLVED market via the `claim_payout` instruction
+ * (no args — the on-chain handler computes the payout from market resolution +
+ * the bot's holdings). Its accounts are a strict subset of {@link resolveAccounts}'
+ * output, so we reuse the same resolver.
+ *
+ * Guards on the market account we already fetch: if the market is not resolved
+ * yet, throws {@link MarketNotResolvedError} BEFORE building/simulating, so no
+ * doomed transaction is sent. Double-claim is impossible on-chain (the
+ * `user_position.claimed` flag) — a second attempt simulates to `AlreadyClaimed`,
+ * which the caller treats as terminal. An already-existing trader ATA is fine;
+ * the idempotent create instruction is a no-op then.
+ */
+export async function executeClaimPayout(
+  program: Program<DekantPm>,
+  programId: PublicKey,
+  marketPubkey: PublicKey,
+  trader: PublicKey,
+  resolveDecimals: DecimalsResolver
+): Promise<ClaimResult> {
+  const { accounts, collateralMint, traderAta, marketAccount } = await resolveAccounts(
+    program,
+    programId,
+    marketPubkey,
+    trader,
+    resolveDecimals
+  );
+
+  const marketState = Number(marketAccount.state as number);
+  if (marketState !== MARKET_STATE_RESOLVED) {
+    throw new MarketNotResolvedError(marketState);
+  }
+
+  const builder = program.methods
+    .claimPayout()
+    .accountsPartial(accounts)
+    .preInstructions([
+      ComputeBudgetProgram.setComputeUnitLimit({ units: 400_000 }),
+      ComputeBudgetProgram.setComputeUnitPrice({ microLamports: priorityFeeMicroLamports() }),
+      ensureTraderAtaIx(trader, traderAta, collateralMint)
+    ]);
+
+  await simulateOrThrow(program, builder);
+
+  const txId = await builder.rpc({ skipPreflight: false, maxRetries: 3, commitment: "confirmed" });
+  return { txId };
 }

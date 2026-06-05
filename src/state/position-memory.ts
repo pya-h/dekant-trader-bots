@@ -49,6 +49,42 @@ export class BotPositionMemory {
     this.writeQueue = this.writeQueue.then(() => this.persist()).catch(() => {});
   }
 
+  /**
+   * Distinct market ids that any bot has an entry for. Since `record` is called
+   * on the first successful buy and entries are never pruned on sell, this doubles
+   * as the "markets the fleet has participated in" set used to find claim
+   * candidates (those no longer active but possibly resolved).
+   */
+  listMarketIds(): string[] {
+    const ids = new Set<string>();
+    for (const entry of this.entries.values()) {
+      ids.add(entry.marketId);
+    }
+    return [...ids];
+  }
+
+  /** Bot public keys that have a recorded position in `marketId` (the participants). */
+  botPubkeysForMarket(marketId: string): string[] {
+    const out: string[] = [];
+    for (const entry of this.entries.values()) {
+      if (entry.marketId === marketId) {
+        out.push(entry.botPubkey);
+      }
+    }
+    return out;
+  }
+
+  /**
+   * Remove a (bot, market) entry once its payout is terminally resolved (claimed,
+   * already-claimed, or nothing to claim) so the market stops being a claim
+   * candidate. Persisted like `record`. No-op if the entry is absent.
+   */
+  delete(botPubkey: string, marketId: string): void {
+    if (this.entries.delete(makeKey(botPubkey, marketId))) {
+      this.writeQueue = this.writeQueue.then(() => this.persist()).catch(() => {});
+    }
+  }
+
   private async persist(): Promise<void> {
     const file: BotPositionMemoryFile = {
       version: 1,

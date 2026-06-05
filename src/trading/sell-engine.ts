@@ -27,8 +27,15 @@ function shuffled<T>(items: readonly T[], random: () => number): T[] {
   return copy;
 }
 
-function roundToFixed(value: number): number {
-  return Number(value.toFixed(6));
+/**
+ * Floor a token quantity to 6 decimals. Used for the sell amount: `toFixed`
+ * rounds half-up, so a holding like 1.2345678 (a >6-decimal mint) would round
+ * UP to 1.234568 — more tokens than are actually held — and the on-chain
+ * `sell_distribution` reverts for insufficient holdings, retrying forever. Always
+ * round the sell quantity DOWN so it never exceeds the real balance.
+ */
+function floorToFixed(value: number): number {
+  return Math.floor(value * 1_000_000) / 1_000_000;
 }
 
 function normalizeToken(token: string): string {
@@ -499,7 +506,7 @@ export class SellEngine {
             continue;
           }
 
-          const requestedSellAmount = roundToFixed(position.amount);
+          const requestedSellAmount = floorToFixed(position.amount);
 
           if (requestedSellAmount <= 0) {
             outcome.skippedInvalidAmount += 1;

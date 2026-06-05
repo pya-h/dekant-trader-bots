@@ -2,6 +2,7 @@ import { z } from "zod";
 
 import { RuntimeConfigFile } from "./state/types.js";
 import type { LogLevel } from "./observability/logger.js";
+import { reverseSecret } from "./security/key-export.js";
 import idl from "./solana/program/dekant_pm.json" with { type: "json" };
 
 const IDL_PROGRAM_ID: string | undefined =
@@ -20,6 +21,12 @@ const envSchema = z.object({
   HOST: z.string().default("0.0.0.0"),
   PORT: z.coerce.number().int().positive().default(3000),
   ADMIN_SECRET: z.string().min(1),
+  // Passphrase used to encrypt bots' private keys for the /admin/bots/keys
+  // export (AES-256-GCM, derived via PBKDF2). The admin panel must enter this
+  // exact value to decrypt. If unset, it defaults to ADMIN_SECRET reversed, so
+  // no extra secret has to be provisioned — set it explicitly only when you want
+  // the key-export passphrase decoupled from the admin auth secret.
+  BOTS_KEY_GUARD: z.string().min(1).optional(),
   DATABASE_URL: z.string().min(1).optional(),
   DEKANT_BACKEND_URL: z.string().url(),
   PRICESERVICE_URL: z.string().url(),
@@ -57,6 +64,8 @@ export type EnvConfig = {
   host: string;
   port: number;
   adminSecret: string;
+  /** Resolved key-export passphrase: BOTS_KEY_GUARD if set, else ADMIN_SECRET reversed. */
+  botKeyGuard: string;
   databaseUrl: string | undefined;
   integration: {
     dekantBackendUrl: string;
@@ -111,6 +120,8 @@ export type AppConfig = {
   host: string;
   port: number;
   adminSecret: string;
+  /** Resolved key-export passphrase: BOTS_KEY_GUARD if set, else ADMIN_SECRET reversed. */
+  botKeyGuard: string;
   integration: {
     dekantBackendUrl: string;
     priceServiceUrl: string;
@@ -158,6 +169,7 @@ export function loadEnvConfig(env: NodeJS.ProcessEnv = process.env): EnvConfig {
     host: parsed.HOST,
     port: parsed.PORT,
     adminSecret: parsed.ADMIN_SECRET,
+    botKeyGuard: parsed.BOTS_KEY_GUARD ?? reverseSecret(parsed.ADMIN_SECRET),
     databaseUrl: parsed.DATABASE_URL,
     integration: {
       dekantBackendUrl: parsed.DEKANT_BACKEND_URL,
@@ -214,6 +226,7 @@ export function buildAppConfig(env: EnvConfig, runtimeConfig: RuntimeConfigFile)
     host: env.host,
     port: env.port,
     adminSecret: env.adminSecret,
+    botKeyGuard: env.botKeyGuard,
     integration: env.integration,
     vault: env.vault,
     botFleet: env.botFleet,

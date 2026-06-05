@@ -3,6 +3,7 @@ import { timingSafeEqual } from "node:crypto";
 import { z } from "zod";
 import { parsePaginationQuery } from "./api/pagination.js";
 import { AppConfig } from "./config.js";
+import type { BotKeyExport } from "./security/key-export.js";
 import type { StructuredLogger } from "./observability/logger.js";
 
 type StatusRuntimeSnapshot = {
@@ -52,6 +53,7 @@ type AdminHandlers = {
   addIgnoredMarkets?: (input: { marketIds: string[] }) => Promise<unknown>;
   removeIgnoredMarkets?: (input: { marketIds: string[] }) => Promise<unknown>;
   getBotBalances?: (input: { page: number; pageSize: number }) => Promise<BotBalancesPage>;
+  getBotKeys?: () => Promise<BotKeyExport>;
   updateRuntimeConfig?: (input: RuntimeConfigPatch) => Promise<unknown>;
 };
 
@@ -370,6 +372,23 @@ export function buildApp(
 
           throw error;
         }
+      });
+
+      // Returns every bot's public key plus its secret key ENCRYPTED (never the
+      // raw secret). The secret is AES-256-GCM encrypted under a key derived from
+      // the admin secret reversed; the panel decrypts it client-side after the
+      // operator re-enters that reversed secret. Admin-auth (x-security) already
+      // gates this route via the onRequest hook above.
+      adminScope.get("/bots/keys", async (request, reply) => {
+        if (!adminHandlers.getBotKeys) {
+          return reply.code(503).send({ error: "bot_keys_unavailable" });
+        }
+
+        const data = await adminHandlers.getBotKeys();
+        return {
+          status: "ok",
+          ...data
+        };
       });
 
       adminScope.post("/bots/fund", async (request, reply) => {

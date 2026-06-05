@@ -43,6 +43,16 @@ describe("loadEnvConfig", () => {
     expect(config.runtimeDefaults.vaultMintAllowlist).toEqual(["MintA", "MintB", "MintC"]);
   });
 
+  it("defaults botKeyGuard to the admin secret reversed", () => {
+    const config = loadEnvConfig(createBaseEnv({ ADMIN_SECRET: "abc123", BOTS_KEY_GUARD: undefined }));
+    expect(config.botKeyGuard).toBe("321cba");
+  });
+
+  it("uses BOTS_KEY_GUARD verbatim when provided", () => {
+    const config = loadEnvConfig(createBaseEnv({ ADMIN_SECRET: "abc123", BOTS_KEY_GUARD: "custom-guard" }));
+    expect(config.botKeyGuard).toBe("custom-guard");
+  });
+
   it("fails fast when required env value is missing", () => {
     expect(() =>
       loadEnvConfig(

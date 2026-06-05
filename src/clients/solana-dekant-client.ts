@@ -3,7 +3,7 @@ import { AnchorProvider, Program, Wallet } from "@coral-xyz/anchor";
 import idl from "../solana/program/dekant_pm.json" with { type: "json" };
 import type { DekantPm } from "../solana/program/dekant_pm.js";
 import { deriveMarket, deriveUserPosition } from "../solana/pdas.js";
-import { executeBuyDistribution, executeSellDistribution } from "../solana/transactions.js";
+import { executeBuyDistribution, executeClaimPayout, executeSellDistribution } from "../solana/transactions.js";
 import type {
   DekantClient,
   DekantMarket,
@@ -143,6 +143,24 @@ export class SolanaDekantClient implements DekantClient {
     return result;
   }
 
+  /**
+   * Claim a bot's payout from a resolved market. Throws `MarketNotResolvedError`
+   * (re-thrown from {@link executeClaimPayout}) when the market isn't resolved yet
+   * so the caller can leave the participant entry for a later pass. No HTTP /
+   * position lookup is involved — the caller supplies (botId, marketId).
+   */
+  async submitClaimPayout(input: { botId: string; marketId: string }): Promise<{ txId: string }> {
+    const keypair = this.getBotKeypair(input.botId);
+    if (!keypair) {
+      throw new Error(`bot_keypair_not_found:${input.botId}`);
+    }
+    const program = this.buildProgram(keypair);
+    const marketPubkey = this.resolveMarketPubkeyById(input.marketId);
+    return executeClaimPayout(program, this.programId, marketPubkey, keypair.publicKey, (mint) =>
+      this.mintRegistry.getDecimals(mint)
+    );
+  }
+
   private async tradeContext(input: SubmitTradeRequest) {
     const keypair = this.getBotKeypair(input.botId);
     if (!keypair) {
@@ -158,7 +176,17 @@ export class SolanaDekantClient implements DekantClient {
       commitment: "confirmed",
       preflightCommitment: "confirmed"
     });
-    return new Program<DekantPm>(idl as DekantPm, provider);
+    // Anchor resolves the program id from `idl.address`, but every PDA
+    // (market, protocolConfig, userPosition, vaultAuthority) is derived from the
+    // env-configured `this.programId`. If PROGRAM_ID differs from the bundled IDL
+    // address — e.g. the IDL wasn't re-synced for the staging vs main program —
+    // instructions target one program while the accounts point at another and
+    // every trade fails with ConstraintSeeds. Force the IDL address to the env
+    // program id so the two can never diverge (env is the single source of
+    // truth; `program-sync` becomes a build-time convenience, not a correctness
+    // requirement). Clone so the shared imported IDL object isn't mutated.
+    const syncedIdl = { ...(idl as DekantPm), address: this.programId.toBase58() } as DekantPm;
+    return new Program<DekantPm>(syncedIdl, provider);
   }
 
   private resolveMarketPubkey(market: DekantMarket): PublicKey {

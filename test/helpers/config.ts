@@ -6,6 +6,7 @@ export function createTestAppConfig(overrides: Partial<AppConfig> = {}): AppConf
     host: "127.0.0.1",
     port: 0,
     adminSecret: "test-secret",
+    botKeyGuard: "terces-tset",
     integration: {
       dekantBackendUrl: "https://backend.example.com",
       priceServiceUrl: "https://prices.example.com",

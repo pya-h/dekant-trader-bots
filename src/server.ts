@@ -10,6 +10,7 @@ import { FaucetClient, HttpFaucetClient } from "./clients/faucet-client.js";
 import { DekantClient, HttpDekantClient } from "./clients/dekant-client.js";
 import { SolanaDekantClient } from "./clients/solana-dekant-client.js";
 import type { BotRecord } from "./state/types.js";
+import { encryptBotSecrets } from "./security/key-export.js";
 import { PriceClient } from "./clients/price-client.js";
 import { loadKeypairFromSecret, SolanaVaultClient } from "./clients/solana-vault-client.js";
 import { SolanaBalanceClient } from "./clients/solana-balance-client.js";
@@ -43,6 +44,7 @@ import {
   SellEngineIntervalProvider,
   SellEnginePriceClient
 } from "./trading/sell-engine.js";
+import { ClaimClient, runClaimPass } from "./trading/claim-engine.js";
 
 dotenv.config({ quiet: true });
 
@@ -105,6 +107,11 @@ export type AppInitializationOptions = {
     now?: () => Date;
     random?: () => number;
     timer?: SellEngineIntervalProvider;
+  };
+  // Claiming runs on the market-refresh pass (no own loop). Enabled only when
+  // provided, so tests/embeddings without an on-chain client are unaffected.
+  claim?: {
+    dekant: ClaimClient;
   };
 };
 
@@ -669,6 +676,53 @@ export async function createInitializedApp(
     });
   };
 
+  let claimPassRunning = false;
+  const runClaimPassSafe = async (activeMarkets: Array<{ id: string }>) => {
+    // Guard against overlap if a refresh fires while a slow claim pass is still
+    // going. Overlap would only be wasteful (the on-chain `claimed` flag makes it
+    // safe), but skipping is cleaner. Never throws — claim issues must not break
+    // the market-refresh job.
+    if (!options.claim || claimPassRunning) {
+      return;
+    }
+    claimPassRunning = true;
+    try {
+      const result = await runClaimPass({
+        client: options.claim.dekant,
+        positionMemory,
+        getBots: () => state.botsState.bots,
+        activeMarketIds: new Set(activeMarkets.map((market) => market.id)),
+        onClaim: (event) =>
+          safeInfo(logger, "claim_payout_executed", {
+            botId: event.botId,
+            marketId: event.marketId,
+            txId: event.txId
+          }),
+        onTerminal: (event) =>
+          safeDebug(logger, "claim_payout_skipped", {
+            botId: event.botId,
+            marketId: event.marketId,
+            reason: event.error instanceof Error ? event.error.message : String(event.error)
+          }),
+        onFailure: (event) =>
+          safeWarn(logger, "claim_payout_failed", {
+            botId: event.botId,
+            marketId: event.marketId,
+            error: event.error instanceof Error ? event.error.message : String(event.error)
+          })
+      });
+      if (result.claimed > 0 || result.failed > 0 || result.pruned > 0) {
+        safeInfo(logger, "claim_pass_completed", { ...result });
+      }
+    } catch (error) {
+      safeWarn(logger, "claim_pass_error", {
+        error: error instanceof Error ? error.message : String(error)
+      });
+    } finally {
+      claimPassRunning = false;
+    }
+  };
+
   const runMarketRefresh = async () => {
     if (!marketCache) {
       throw new Error("market_cache_unavailable");
@@ -684,6 +738,9 @@ export async function createInitializedApp(
         markets: snapshot.markets.length
       });
       await syncVaultSupportedMintsFromMarkets(snapshot.markets);
+      // Claim any resolved-market payouts for bots that participated. Uses the
+      // active set to derive candidates (participated markets no longer active).
+      await runClaimPassSafe(snapshot.markets);
     } else {
       trackAndLogFailure({
         monitor: runtimeMonitor,
@@ -1064,6 +1121,18 @@ export async function createInitializedApp(
       getBotBalances: balanceClient
         ? async (input: { page: number; pageSize: number }) => getBotBalances(input)
         : undefined,
+      // Encrypt under BOTS_KEY_GUARD (defaults to the admin secret reversed) —
+      // the panel re-enters that passphrase to decrypt. Raw secret keys never go
+      // on the wire or into logs.
+      getBotKeys: async () =>
+        encryptBotSecrets(
+          state.botsState.bots.map((bot) => ({
+            id: bot.id,
+            publicKey: bot.publicKey,
+            secretKey: bot.secretKey
+          })),
+          config.botKeyGuard
+        ),
       updateRuntimeConfig: async (patch: RuntimeConfigPatchInput) => updateRuntimeConfig(patch)
     },
     logger
@@ -1243,7 +1312,10 @@ async function start(): Promise<void> {
     fn: null
   };
 
-  const dekantClient: DekantClient = new SolanaDekantClient({
+  // Inferred (not annotated `DekantClient`) so it keeps the concrete
+  // `submitClaimPayout` method the claim pass needs, while still satisfying every
+  // `DekantClient` consumer below.
+  const dekantClient = new SolanaDekantClient({
     connection,
     programId,
     mintRegistry,
@@ -1292,7 +1364,8 @@ async function start(): Promise<void> {
       vaultAddress
     },
     buy: { dekant: dekantClient, price: priceClient },
-    sell: { dekant: dekantClient, price: priceClient }
+    sell: { dekant: dekantClient, price: priceClient },
+    claim: { dekant: dekantClient }
   });
   const { app, config } = appCtx;
 
