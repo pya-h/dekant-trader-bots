@@ -45,6 +45,7 @@ export function makeInitialRuntimeConfig(envConfig: EnvConfig): RuntimeConfigFil
     updatedAt: new Date().toISOString(),
     config: {
       ignoredMarketIds: [],
+      marketIntervals: {},
       trading: {
         buyChance: envConfig.runtimeDefaults.buyChance,
         sellChance: envConfig.runtimeDefaults.sellChance,

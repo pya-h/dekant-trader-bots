@@ -13,39 +13,6 @@ type BalanceSnapshot = {
   tokens: Record<string, number>;
 };
 
-type IntervalHarness = {
-  timer: {
-    setInterval: (handler: () => void, intervalMs: number) => unknown;
-    clearInterval: (handle: unknown) => void;
-  };
-  tick: () => Promise<void>;
-};
-
-function createIntervalHarness(): IntervalHarness {
-  let intervalHandler: (() => void) | null = null;
-
-  return {
-    timer: {
-      setInterval: (handler: () => void) => {
-        intervalHandler = handler;
-        return "interval-handle";
-      },
-      clearInterval: () => {
-        intervalHandler = null;
-      }
-    },
-    tick: async () => {
-      if (!intervalHandler) {
-        throw new Error("interval_not_started");
-      }
-
-      intervalHandler();
-      await Promise.resolve();
-      await Promise.resolve();
-    }
-  };
-}
-
 async function bootstrapBots(env: NodeJS.ProcessEnv, store: InMemoryStateStore): Promise<BotRecord[]> {
   const appCtx = await createInitializedApp(env, {
     store,
@@ -277,8 +244,10 @@ describe("full system e2e", () => {
     });
     const capturedLogger = createCapturedLogger();
 
-    const buyInterval = createIntervalHarness();
-    const sellInterval = createIntervalHarness();
+    // Controllable clock so the single trade scheduler can be advanced past the
+    // default trade interval and made to fire deterministically.
+    let nowMs = Date.parse("2026-01-01T00:00:00.000Z");
+    const now = () => new Date(nowMs);
 
     const appCtx = await createInitializedApp(env, {
       store,
@@ -292,32 +261,32 @@ describe("full system e2e", () => {
       buy: {
         dekant: dekant.dekantClient,
         price: priceClient,
-        random: () => 0.2,
-        timer: buyInterval.timer
+        random: () => 0.2
       },
       sell: {
         dekant: dekant.dekantClient,
         price: priceClient,
-        random: () => 0.95,
-        timer: sellInterval.timer
+        random: () => 0.95
       },
       funding: fundingHarness.funding,
       observability: {
-        logger: capturedLogger.logger
+        logger: capturedLogger.logger,
+        now
       }
     });
 
     await appCtx.app.ready();
     await appCtx.markets!.refresh();
 
-    await appCtx.buy!.start();
-    await appCtx.sell!.start();
+    // First scheduler tick stamps both markets "now" (no trade). Advancing past
+    // the default trade interval and ticking again runs a scheduled buy+sell
+    // cycle per market.
+    await appCtx.trading!.tick();
+    nowMs += 1_300_000; // > default tradeMs (BUY_INTERVAL_MS fallback = 1_200_000)
+    await appCtx.trading!.tick();
 
     expect(appCtx.buy!.getSnapshot().lastResult?.source).toBe("scheduled");
     expect(appCtx.sell!.getSnapshot().lastResult?.source).toBe("scheduled");
-
-    await buyInterval.tick();
-    await sellInterval.tick();
 
     const manualBuy = await request(appCtx.app.server)
       .post("/admin/bots/buy")
@@ -369,8 +338,7 @@ describe("full system e2e", () => {
     expect(dekant.submitSellCalls.length).toBeGreaterThan(0);
     expect(capturedLogger.entries).toHaveLength(0);
 
-    await appCtx.buy!.stop();
-    await appCtx.sell!.stop();
+    await appCtx.trading!.stop();
     await appCtx.app.close();
   });
 

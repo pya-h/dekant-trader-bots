@@ -149,10 +149,11 @@ describe("runtime loops", () => {
     await appCtx.app.close();
   });
 
-  it("scheduled buy loop contributes to stats without manual trigger", async () => {
+  it("trade scheduler fires due markets and contributes to stats without manual trigger", async () => {
     const env = createBaseEnv({
       BOT_COUNTS: "2",
-      BUY_CHANCE: "100"
+      BUY_CHANCE: "100",
+      TRADE_INTERVAL_MS: "1000"
     });
 
     const markets: DekantMarket[] = [{ id: "m1", subject: "BTC",
@@ -195,7 +196,10 @@ describe("runtime loops", () => {
       }
     };
 
-    let buyTick: (() => void) | null = null;
+    // Controllable clock so we can advance past a market's interval and assert
+    // the scheduler fires it (without waiting real wall-clock time).
+    let nowMs = Date.parse("2026-01-01T00:00:00.000Z");
+    const now = () => new Date(nowMs);
 
     const appCtx = await createInitializedApp(env, {
       store: new InMemoryStateStore(),
@@ -203,33 +207,27 @@ describe("runtime loops", () => {
         setTimeout: () => "timeout",
         clearTimeout: () => {}
       },
+      observability: { now },
       marketCache: {
         client: dekantClient
       },
       buy: {
         dekant: dekantClient,
         price: priceClient,
-        random: () => 0.5,
-        timer: {
-          setInterval: (handler: () => void) => {
-            buyTick = handler;
-            return "buy-interval";
-          },
-          clearInterval: () => {
-            buyTick = null;
-          }
-        }
+        random: () => 0.5
       }
     });
 
     await appCtx.app.ready();
     await appCtx.markets!.refresh();
 
-    await appCtx.buy!.start({ immediate: false });
-    expect(buyTick).not.toBeNull();
+    // First scheduler tick stamps the freshly-seen market "now" — no trade yet.
+    await appCtx.trading!.tick();
+    expect(appCtx.buy!.getSnapshot().lastResult).toBeNull();
 
-    const buyTickHandler = buyTick as unknown as () => void;
-    buyTickHandler();
+    // Advance past the trade interval; the next tick makes m1 due and trades.
+    nowMs += 2_000;
+    await appCtx.trading!.tick();
     await waitFor(() => appCtx.buy!.getSnapshot().lastResult !== null);
 
     const stats = await request(appCtx.app.server)
@@ -239,7 +237,7 @@ describe("runtime loops", () => {
     expect(stats.status).toBe(200);
     expect(stats.body.global.buyTrades).toBeGreaterThan(0);
 
-    await appCtx.buy!.stop();
+    await appCtx.trading!.stop();
     await appCtx.app.close();
   });
 

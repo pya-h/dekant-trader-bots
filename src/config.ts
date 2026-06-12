@@ -35,6 +35,13 @@ const envSchema = z.object({
   VAULT_SECRET_KEY: z.string().min(1),
   BOT_COUNTS: z.coerce.number().int().positive().default(5),
   MARKET_REFRESH_INTERVAL_MS: z.coerce.number().int().positive().default(3_600_000),
+  // Unified per-market trade-cycle interval (drives both buy and sell for a
+  // market). When unset, falls back to the legacy BUY_INTERVAL_MS for backward
+  // compatibility. BUY_INTERVAL_MS / SELL_INTERVAL_MS are deprecated: SELL is no
+  // longer used and BUY only survives as the TRADE_INTERVAL_MS fallback.
+  TRADE_INTERVAL_MS: z.coerce.number().int().positive().optional(),
+  // How often the single trade scheduler wakes to check which markets are due.
+  TRADE_SCHEDULER_TICK_MS: z.coerce.number().int().positive().default(10_000),
   BUY_INTERVAL_MS: z.coerce.number().int().positive().default(1_200_000),
   SELL_INTERVAL_MS: z.coerce.number().int().positive().default(3_600_000),
   FUNDING_INTERVAL_MS: z.coerce.number().int().positive().default(3_600_000),
@@ -86,7 +93,13 @@ export type EnvConfig = {
   };
   intervals: {
     marketRefreshMs: number;
+    /** Default per-market trade-cycle interval used for markets without an override. */
+    tradeMs: number;
+    /** How often the single trade scheduler wakes to evaluate due markets. */
+    schedulerTickMs: number;
+    /** @deprecated retained only as the TRADE_INTERVAL_MS fallback source. */
     buyMs: number;
+    /** @deprecated no longer drives a loop; kept for backward compatibility. */
     sellMs: number;
     fundingMs: number;
     initialFundingDelayMs: number;
@@ -143,6 +156,8 @@ export type AppConfig = {
   };
   intervals: {
     marketRefreshMs: number;
+    tradeMs: number;
+    schedulerTickMs: number;
     buyMs: number;
     sellMs: number;
     fundingMs: number;
@@ -194,6 +209,10 @@ export function loadEnvConfig(env: NodeJS.ProcessEnv = process.env): EnvConfig {
     },
     intervals: {
       marketRefreshMs: parsed.MARKET_REFRESH_INTERVAL_MS,
+      // Prefer the unified TRADE_INTERVAL_MS; fall back to the legacy
+      // BUY_INTERVAL_MS so existing deployments keep their cadence.
+      tradeMs: parsed.TRADE_INTERVAL_MS ?? parsed.BUY_INTERVAL_MS,
+      schedulerTickMs: parsed.TRADE_SCHEDULER_TICK_MS,
       buyMs: parsed.BUY_INTERVAL_MS,
       sellMs: parsed.SELL_INTERVAL_MS,
       fundingMs: parsed.FUNDING_INTERVAL_MS,

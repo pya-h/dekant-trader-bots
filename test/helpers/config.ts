@@ -23,6 +23,8 @@ export function createTestAppConfig(overrides: Partial<AppConfig> = {}): AppConf
     },
     intervals: {
       marketRefreshMs: 3_600_000,
+      tradeMs: 1_200_000,
+      schedulerTickMs: 10_000,
       buyMs: 1_200_000,
       sellMs: 3_600_000,
       fundingMs: 3_600_000,
@@ -30,6 +32,7 @@ export function createTestAppConfig(overrides: Partial<AppConfig> = {}): AppConf
     },
     runtime: {
       ignoredMarketIds: [],
+      marketIntervals: {},
       trading: {
         buyChance: 90,
         sellChance: 35,

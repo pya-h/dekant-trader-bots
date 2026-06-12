@@ -19,6 +19,10 @@ export const runtimePriceConfigSchema = z.object({
 
 export const runtimeConfigSchema = z.object({
   ignoredMarketIds: z.array(z.string()),
+  // Per-market trade-cycle interval overrides (marketId -> intervalMs). A market
+  // not listed here uses the env default (TRADE_INTERVAL_MS). Defaults to {} so
+  // configs persisted before this field existed load unchanged.
+  marketIntervals: z.record(z.string(), z.number().int().positive()).default({}),
   trading: runtimeTradingConfigSchema,
   funding: runtimeFundingConfigSchema,
   price: runtimePriceConfigSchema

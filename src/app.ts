@@ -43,6 +43,18 @@ type StatusRuntimeSnapshot = {
     idlProgramId?: string | null;
     programIdSource?: string;
   };
+  tradeSchedule?: {
+    isRunning: boolean;
+    tickMs: number;
+    defaultIntervalMs: number;
+    markets: Array<{
+      marketId: string;
+      intervalMs: number;
+      isOverride: boolean;
+      lastCycleAt: string | null;
+      nextDueAt: string | null;
+    }>;
+  };
   claim?: ClaimStatusSnapshot;
 };
 
@@ -84,6 +96,9 @@ type AdminHandlers = {
   getBotKeys?: () => Promise<BotKeyExport>;
   getEvents?: (input: { limit?: number }) => EventLogSnapshot | Promise<EventLogSnapshot>;
   updateRuntimeConfig?: (input: RuntimeConfigPatch) => Promise<unknown>;
+  updateMarketIntervals?: (input: {
+    intervals: Array<{ marketId: string; intervalMs: number | null }>;
+  }) => Promise<unknown>;
 };
 
 const marketScopedBodySchema = z
@@ -130,6 +145,23 @@ const runtimeConfigPatchSchema = z
 const addBotsBodySchema = z
   .object({
     count: z.number().int().positive()
+  })
+  .strict();
+
+// Set or clear per-market trade-cycle interval overrides. interval_ms === null
+// removes the override (the market reverts to the default interval).
+const marketIntervalsBodySchema = z
+  .object({
+    intervals: z
+      .array(
+        z
+          .object({
+            market_id: z.string().min(1),
+            interval_ms: z.number().int().positive().nullable()
+          })
+          .strict()
+      )
+      .min(1)
   })
   .strict();
 
@@ -490,6 +522,32 @@ export function buildApp(
         return {
           status: "ok",
           config
+        };
+      });
+
+      // Set or clear per-market trade-cycle interval overrides. Body:
+      // { intervals: [{ market_id, interval_ms }] } where interval_ms is a
+      // positive ms value, or null to reset that market to the default interval.
+      adminScope.post("/markets/intervals", async (request, reply) => {
+        if (!adminHandlers.updateMarketIntervals) {
+          return reply.code(503).send({ error: "market_control_unavailable" });
+        }
+
+        const parsed = marketIntervalsBodySchema.safeParse(request.body ?? {});
+        if (!parsed.success) {
+          return reply.code(400).send({ error: "invalid_payload" });
+        }
+
+        const result = await adminHandlers.updateMarketIntervals({
+          intervals: parsed.data.intervals.map((entry) => ({
+            marketId: entry.market_id,
+            intervalMs: entry.interval_ms
+          }))
+        });
+
+        return {
+          status: "ok",
+          result
         };
       });
     },

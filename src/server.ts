@@ -108,6 +108,10 @@ export type AppInitializationOptions = {
     random?: () => number;
     timer?: SellEngineIntervalProvider;
   };
+  // The single per-market trade scheduler that drives both buy and sell cycles.
+  tradeScheduler?: {
+    timer?: LoopIntervalProvider;
+  };
   // Claiming runs on the market-refresh pass (no own loop). Enabled only when
   // provided, so tests/embeddings without an on-chain client are unaffected.
   claim?: {
@@ -302,7 +306,7 @@ export async function createInitializedApp(
           runtime: {
             buyChance: config.runtime.trading.buyChance,
             maxAmount: config.runtime.trading.maxAmount,
-            intervalMs: config.intervals.buyMs
+            intervalMs: config.intervals.tradeMs
           },
           clients: {
             dekant: options.buy.dekant,
@@ -329,7 +333,7 @@ export async function createInitializedApp(
       ? new SellEngine({
           runtime: {
             sellChance: config.runtime.trading.sellChance,
-            intervalMs: config.intervals.sellMs
+            intervalMs: config.intervals.tradeMs
           },
           clients: {
             dekant: options.sell.dekant,
@@ -397,6 +401,38 @@ export async function createInitializedApp(
     await persistRuntimeConfig(nextConfig);
     marketCache?.setIgnoredMarketIds(nextIgnored);
     return { ignoredMarketIds: nextIgnored };
+  };
+
+  // Set or clear per-market trade-cycle interval overrides. An entry with
+  // intervalMs === null removes the override (market reverts to the default).
+  // The scheduler reads these live from runtime config on each tick, so changes
+  // take effect on the next scheduler tick without any extra wiring.
+  const updateMarketIntervals = async (
+    updates: Array<{ marketId: string; intervalMs: number | null }>
+  ) => {
+    const current = state.runtimeConfig.config.marketIntervals;
+    const next: Record<string, number> = { ...current };
+    for (const update of updates) {
+      const id = update.marketId.trim();
+      if (!id) {
+        continue;
+      }
+      if (update.intervalMs === null) {
+        delete next[id];
+      } else {
+        next[id] = update.intervalMs;
+      }
+    }
+    const nextConfig = {
+      ...state.runtimeConfig.config,
+      marketIntervals: next
+    };
+    await persistRuntimeConfig(nextConfig);
+    safeInfo(logger, "market_intervals_updated", {
+      updated: updates.length,
+      overrides: Object.keys(next).length
+    });
+    return { marketIntervals: next };
   };
 
   const updateRuntimeConfig = async (patch: RuntimeConfigPatchInput) => {
@@ -962,13 +998,11 @@ export async function createInitializedApp(
   }
 
   const marketLoopTimer = options.marketCache?.timer ?? defaultLoopIntervalProvider;
-  const buyLoopTimer = options.buy?.timer ?? defaultLoopIntervalProvider;
-  const sellLoopTimer = options.sell?.timer ?? defaultLoopIntervalProvider;
+  const tradeSchedulerTimer = options.tradeScheduler?.timer ?? defaultLoopIntervalProvider;
   const fundingLoopTimer = options.funding?.timer ?? defaultLoopIntervalProvider;
 
   let marketLoopHandle: unknown = null;
-  let buyLoopHandle: unknown = null;
-  let sellLoopHandle: unknown = null;
+  let tradeSchedulerHandle: unknown = null;
   let fundingLoopHandle: unknown = null;
 
   const startMarketLoop = async (options: { immediate?: boolean } = {}) => {
@@ -999,60 +1033,123 @@ export async function createInitializedApp(
     safeInfo(logger, "market_loop_stopped");
   };
 
-  const startBuyLoop = async (options: { immediate?: boolean } = {}) => {
-    if (!buyEngine || buyLoopHandle !== null) {
+  // ---- Per-market trade scheduler ----
+  // A single processor (instead of one timer per market) wakes every
+  // schedulerTickMs and, for each active market, runs a buy+sell cycle once the
+  // market's own interval has elapsed since its last cycle. Each market is run as
+  // an independent cycle so the monitor's cycle counts sum across markets. The
+  // last-cycle timestamps live only in memory: a market first observed (on
+  // startup or when newly discovered by a refresh) is stamped "now" and does not
+  // fire until one interval later — never immediately.
+  const defaultTradeIntervalMs = config.intervals.tradeMs;
+  const schedulerTickMs = config.intervals.schedulerTickMs;
+  const lastTradeCycleAtByMarket = new Map<string, number>();
+
+  const getMarketTradeIntervalMs = (marketId: string): number => {
+    const override = state.runtimeConfig.config.marketIntervals[marketId];
+    return typeof override === "number" && override > 0 ? override : defaultTradeIntervalMs;
+  };
+
+  let tradeSchedulerRunning = false;
+  const runTradeSchedulerTick = async (): Promise<void> => {
+    if (!marketCache || (!buyEngine && !sellEngine)) {
       return;
     }
+    // Don't let a slow tick overlap its own next fire.
+    if (tradeSchedulerRunning) {
+      return;
+    }
+    tradeSchedulerRunning = true;
+    try {
+      const markets = marketCache.getSnapshot().markets;
+      const nowMs = now().getTime();
+      const activeIds = new Set(markets.map((market) => market.id));
 
-    safeInfo(logger, "buy_loop_starting", {
-      intervalMs: config.intervals.buyMs,
-      immediate: options.immediate !== false
+      // Forget markets that are no longer active so a returning market
+      // re-initializes to "now" rather than firing immediately on its return.
+      for (const id of [...lastTradeCycleAtByMarket.keys()]) {
+        if (!activeIds.has(id)) {
+          lastTradeCycleAtByMarket.delete(id);
+        }
+      }
+
+      const dueMarketIds: string[] = [];
+      for (const market of markets) {
+        const last = lastTradeCycleAtByMarket.get(market.id);
+        if (last === undefined) {
+          // First sighting — stamp now so the first real cycle is one interval out.
+          lastTradeCycleAtByMarket.set(market.id, nowMs);
+          continue;
+        }
+        if (nowMs - last >= getMarketTradeIntervalMs(market.id)) {
+          dueMarketIds.push(market.id);
+          // Stamp before running so a long cycle can't double-fire next tick.
+          lastTradeCycleAtByMarket.set(market.id, nowMs);
+        }
+      }
+
+      if (dueMarketIds.length === 0) {
+        return;
+      }
+
+      safeDebug(logger, "trade_scheduler_tick", { dueMarkets: dueMarketIds.length });
+
+      // One buy + one sell cycle per due market. Sequential to keep RPC/price
+      // pressure bounded; a single market's failure must not skip the others.
+      for (const marketId of dueMarketIds) {
+        if (buyEngine) {
+          await runBuyCycle({ source: "scheduled", marketIds: [marketId] }).catch(() => {});
+        }
+        if (sellEngine) {
+          await runSellCycle({ source: "scheduled", marketIds: [marketId] }).catch(() => {});
+        }
+      }
+    } finally {
+      tradeSchedulerRunning = false;
+    }
+  };
+
+  const startTradeScheduler = () => {
+    if ((!buyEngine && !sellEngine) || tradeSchedulerHandle !== null) {
+      return;
+    }
+    safeInfo(logger, "trade_scheduler_starting", {
+      tickMs: schedulerTickMs,
+      defaultIntervalMs: defaultTradeIntervalMs
     });
-
-    if (options.immediate !== false) {
-      await runBuyCycle({ source: "scheduled" }).catch(() => {});
-    }
-
-    buyLoopHandle = buyLoopTimer.setInterval(() => {
-      void runBuyCycle({ source: "scheduled" }).catch(() => {});
-    }, config.intervals.buyMs);
+    tradeSchedulerHandle = tradeSchedulerTimer.setInterval(() => {
+      void runTradeSchedulerTick().catch(() => {});
+    }, schedulerTickMs);
   };
 
-  const stopBuyLoop = () => {
-    if (buyLoopHandle === null) {
+  const stopTradeScheduler = () => {
+    if (tradeSchedulerHandle === null) {
       return;
     }
-    buyLoopTimer.clearInterval(buyLoopHandle);
-    buyLoopHandle = null;
-    safeInfo(logger, "buy_loop_stopped");
+    tradeSchedulerTimer.clearInterval(tradeSchedulerHandle);
+    tradeSchedulerHandle = null;
+    safeInfo(logger, "trade_scheduler_stopped");
   };
 
-  const startSellLoop = async (options: { immediate?: boolean } = {}) => {
-    if (!sellEngine || sellLoopHandle !== null) {
-      return;
-    }
-
-    safeInfo(logger, "sell_loop_starting", {
-      intervalMs: config.intervals.sellMs,
-      immediate: options.immediate !== false
-    });
-
-    if (options.immediate !== false) {
-      await runSellCycle({ source: "scheduled" }).catch(() => {});
-    }
-
-    sellLoopHandle = sellLoopTimer.setInterval(() => {
-      void runSellCycle({ source: "scheduled" }).catch(() => {});
-    }, config.intervals.sellMs);
-  };
-
-  const stopSellLoop = () => {
-    if (sellLoopHandle === null) {
-      return;
-    }
-    sellLoopTimer.clearInterval(sellLoopHandle);
-    sellLoopHandle = null;
-    safeInfo(logger, "sell_loop_stopped");
+  const getTradeScheduleSnapshot = () => {
+    const markets = marketCache?.getSnapshot().markets ?? [];
+    return {
+      isRunning: tradeSchedulerHandle !== null,
+      tickMs: schedulerTickMs,
+      defaultIntervalMs: defaultTradeIntervalMs,
+      markets: markets.map((market) => {
+        const last = lastTradeCycleAtByMarket.get(market.id);
+        const intervalMs = getMarketTradeIntervalMs(market.id);
+        const isOverride = typeof state.runtimeConfig.config.marketIntervals[market.id] === "number";
+        return {
+          marketId: market.id,
+          intervalMs,
+          isOverride,
+          lastCycleAt: last === undefined ? null : new Date(last).toISOString(),
+          nextDueAt: last === undefined ? null : new Date(last + intervalMs).toISOString()
+        };
+      })
+    };
   };
 
   const startFundingLoop = async (options: { immediate?: boolean } = {}) => {
@@ -1159,6 +1256,10 @@ export async function createInitializedApp(
       // and the resolved vs. IDL program id — surfaced so the panel can show them
       // and operators can spot a program/IDL mismatch. No secrets here.
       integration: config.integration,
+      // Per-market trade scheduler state: the default interval, the tick cadence
+      // and each market's effective interval + last/next cycle time. Lets the
+      // panel surface and manage per-market timings.
+      tradeSchedule: getTradeScheduleSnapshot(),
       observability: runtimeMonitor.getSnapshot(),
       claim: options.claim
         ? {
@@ -1232,14 +1333,18 @@ export async function createInitializedApp(
           config.botKeyGuard
         ),
       getEvents: (input: { limit?: number }) => runtimeMonitor.getEventLog(input.limit),
-      updateRuntimeConfig: async (patch: RuntimeConfigPatchInput) => updateRuntimeConfig(patch)
+      updateRuntimeConfig: async (patch: RuntimeConfigPatchInput) => updateRuntimeConfig(patch),
+      updateMarketIntervals:
+        buyEngine || sellEngine
+          ? async (input: { intervals: Array<{ marketId: string; intervalMs: number | null }> }) =>
+              updateMarketIntervals(input.intervals)
+          : undefined
     },
     logger
   );
 
   app.addHook("onClose", async () => {
-    stopBuyLoop();
-    stopSellLoop();
+    stopTradeScheduler();
     stopMarketLoop();
     stopFundingLoop();
     fundingSchedule.cancel();
@@ -1351,11 +1456,9 @@ export async function createInitializedApp(
               source: "manual",
               marketIds
             }),
-          start: async (options: { immediate?: boolean } = {}) => startBuyLoop(options),
-          stop: () => stopBuyLoop(),
           getSnapshot: () => ({
             ...buyEngine.getSnapshot(),
-            isRunning: buyLoopHandle !== null
+            isRunning: tradeSchedulerHandle !== null
           })
         }
       : null,
@@ -1366,14 +1469,27 @@ export async function createInitializedApp(
               source: "manual",
               marketIds
             }),
-          start: async (options: { immediate?: boolean } = {}) => startSellLoop(options),
-          stop: () => stopSellLoop(),
           getSnapshot: () => ({
             ...sellEngine.getSnapshot(),
-            isRunning: sellLoopHandle !== null
+            isRunning: tradeSchedulerHandle !== null
           })
         }
-      : null
+      : null,
+    // The single per-market trade scheduler that replaced the global buy/sell
+    // loops. `tick` runs one scheduler pass synchronously for tests; production
+    // uses start()/stop() to drive it on the schedulerTickMs interval.
+    trading:
+      buyEngine || sellEngine
+        ? {
+            start: () => startTradeScheduler(),
+            stop: () => stopTradeScheduler(),
+            tick: async () => runTradeSchedulerTick(),
+            getSnapshot: () => getTradeScheduleSnapshot(),
+            setMarketIntervals: async (
+              intervals: Array<{ marketId: string; intervalMs: number | null }>
+            ) => updateMarketIntervals(intervals)
+          }
+        : null
   };
 }
 
@@ -1494,8 +1610,7 @@ async function start(): Promise<void> {
     shuttingDown = true;
     startupLogger.info?.("shutdown_initiated", { signal });
     try {
-      appCtx.buy?.stop();
-      appCtx.sell?.stop();
+      appCtx.trading?.stop();
       appCtx.markets?.stop();
       appCtx.funding?.stop();
       await app.close();
@@ -1525,23 +1640,11 @@ async function start(): Promise<void> {
   // the first buy cycle isn't kicked off against zero collateral.
   await appCtx.funding?.start({ immediate: !appCtx.startup.initialFundingScheduled });
 
-  // Hold buy/sell loops until initial funding has had time to land on-chain.
-  // Without this, the first cycle fires before bots have any collateral.
-  const initialFundingDelayMs = appCtx.startup.initialFundingScheduled
-    ? (appCtx.startup.initialFundingDelayMs ?? 0)
-    : 0;
-  const tradingStartDelayMs = initialFundingDelayMs + 5_000;
-  if (tradingStartDelayMs > 0) {
-    startupLogger.info?.("trading_loops_deferred", { delayMs: tradingStartDelayMs });
-    setTimeout(() => {
-      void appCtx.buy?.start({ immediate: true });
-      void appCtx.sell?.start({ immediate: true });
-      startupLogger.info?.("trading_loops_started");
-    }, tradingStartDelayMs).unref();
-  } else {
-    await appCtx.buy?.start({ immediate: true });
-    await appCtx.sell?.start({ immediate: true });
-  }
+  // Start the per-market trade scheduler. No immediate cycle: every market is
+  // stamped "now" on the scheduler's first tick and only trades one interval
+  // later, so the first cycle lands well after startup funding has settled —
+  // the old "defer the trading loops" delay is no longer needed.
+  appCtx.trading?.start();
   startupLogger.info?.("server_ready", {
     market: appCtx.markets !== null,
     buy: appCtx.buy !== null,
