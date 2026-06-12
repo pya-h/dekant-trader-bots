@@ -709,6 +709,32 @@
   .popover-overlay.closing { opacity: 0; transition: opacity 0.15s ease; }
   .popover-overlay.closing .popover { transform: scale(0.96); opacity: 0; transition: all 0.15s ease; }
 
+  /* Auth gate — opaque full-screen lock shown until the admin secret is valid.
+     Visible by default so no panel content can flash before authentication. */
+  .auth-gate {
+    position: fixed; inset: 0; z-index: 10000;
+    background: var(--bg);
+    display: flex; align-items: center; justify-content: center;
+    padding: 24px;
+  }
+  .auth-gate.hidden { display: none; }
+  .auth-card {
+    width: 100%; max-width: 380px;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
+    padding: 28px 26px; box-shadow: 0 18px 50px rgba(0,0,0,0.45);
+  }
+  .auth-brand { display: flex; align-items: center; gap: 9px; font-size: 16px; font-weight: 700; margin-bottom: 4px; }
+  .auth-sub { color: var(--text2); font-size: 12px; margin-bottom: 20px; }
+  .auth-card label { display: block; font-size: 11px; color: var(--text2); margin-bottom: 6px; }
+  .auth-input-row { display: flex; gap: 8px; }
+  .auth-input-row input {
+    flex: 1; padding: 10px 12px; font-size: 13px;
+    background: var(--bg); border: 1px solid var(--border); border-radius: 8px; color: var(--text);
+  }
+  .auth-input-row input:focus { outline: none; border-color: var(--accent); }
+  .auth-error { color: var(--red); font-size: 12px; margin-top: 10px; min-height: 16px; }
+  .auth-card .btn { width: 100%; margin-top: 16px; justify-content: center; }
+
   /* Per-operation event history inside the error popover */
   .pop-subhead {
     font-size: 10px; text-transform: uppercase; letter-spacing: 0.7px;
@@ -975,6 +1001,26 @@
 </style>
 </head>
 <body>
+
+<!-- Auth gate — covers everything until the admin secret is verified. Visible by
+     default so no panel content renders before authentication. -->
+<div class="auth-gate" id="authGate">
+  <div class="auth-card">
+    <div class="auth-brand">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+      <span>Dekant Trader Bots</span>
+    </div>
+    <div class="auth-sub">Enter the admin secret to access the panel.</div>
+    <label for="authSecret">Admin secret (x-security)</label>
+    <div class="auth-input-row">
+      <input id="authSecret" type="password" placeholder="admin secret" autocomplete="off" spellcheck="false"
+        onkeydown="if(event.key==='Enter')submitAuth()">
+      <button class="btn sm" type="button" onclick="toggleSecretVisible('authSecret', this)">Show</button>
+    </div>
+    <div class="auth-error" id="authError"></div>
+    <button class="btn primary" id="btnAuth" type="button" onclick="submitAuth()"><span class="spinner"></span> Connect</button>
+  </div>
+</div>
 
 <!-- Header -->
 <div class="header">
@@ -1590,9 +1636,75 @@ async function api(method, path, body) {
     opts.body = JSON.stringify(body);
   }
   const res = await fetch(url, opts);
+  // The admin secret became invalid (revoked/changed) — lock the panel.
+  if (res.status === 401) showAuthGate('Session not authorized — re-enter the admin secret.');
   const json = await res.json();
   if (!res.ok) throw Object.assign(new Error(json.error || res.statusText), { data: json });
   return json;
+}
+
+/* ────────────────────────────────────────────
+   Auth gate — no panel is shown until the admin secret verifies.
+   ──────────────────────────────────────────── */
+let authed = false;
+
+// Validate a secret directly (not via api(), to avoid re-triggering the gate).
+async function verifySecret(secret) {
+  let res;
+  try {
+    res = await fetch(getBase() + '/admin/status', { headers: { 'x-security': secret || '' } });
+  } catch {
+    return { ok: false, reason: 'unreachable' };
+  }
+  if (res.ok) return { ok: true };
+  return { ok: false, reason: res.status === 401 ? 'invalid' : 'error', status: res.status };
+}
+
+function showAuthGate(message) {
+  authed = false;
+  if (typeof stopAutoRefresh === 'function') stopAutoRefresh();
+  const gate = document.getElementById('authGate');
+  if (gate) gate.classList.remove('hidden');
+  const err = document.getElementById('authError');
+  if (err) err.textContent = message || '';
+  const input = document.getElementById('authSecret');
+  if (input) { input.value = settings.adminSecret || ''; setTimeout(() => input.focus(), 50); }
+  try { if (location.hash !== '#/auth') location.hash = '#/auth'; } catch (e) { /* noop */ }
+}
+
+function hideAuthGate() {
+  authed = true;
+  const gate = document.getElementById('authGate');
+  if (gate) gate.classList.add('hidden');
+  try {
+    if (location.hash === '#/auth') history.replaceState(null, '', location.pathname + location.search);
+  } catch (e) { /* noop */ }
+}
+
+async function submitAuth() {
+  const input = document.getElementById('authSecret');
+  const err = document.getElementById('authError');
+  const secret = (input.value || '').trim();
+  if (!secret) { if (err) err.textContent = 'Enter the admin secret'; return; }
+  setLoading('btnAuth', true);
+  if (err) err.textContent = '';
+  try {
+    const result = await verifySecret(secret);
+    if (!result.ok) {
+      if (err) err.textContent =
+        result.reason === 'unreachable' ? 'Cannot reach the server.'
+          : result.reason === 'invalid' ? 'Invalid admin secret.'
+          : `Server error (${result.status || '?'}).`;
+      return;
+    }
+    settings.adminSecret = secret;
+    saveSettings();
+    hideAuthGate();
+    await refreshAll();
+    if (settings.autoStart) startAutoRefresh();
+  } finally {
+    setLoading('btnAuth', false);
+  }
 }
 
 function toast(msg, type = 'success') {
@@ -3033,16 +3145,17 @@ document.addEventListener('keydown', e => {
    Init
    ──────────────────────────────────────────── */
 applyEventLogDefaults();           // seed event-log compact toggles from saved settings
-if (!settings.adminSecret) {
-  // Served by the bot but not yet authenticated — guide the operator to set the
-  // admin secret before the first (otherwise 401) requests fire.
-  toast('Enter the admin secret in Settings to connect', 'error');
-  openSettings();
-} else {
-  refreshAll().then(() => {
+// The auth gate is visible by default. Reveal the panel only once a stored secret
+// verifies; otherwise keep everything hidden and wait for the operator to connect.
+(async function initPanel() {
+  if (settings.adminSecret && (await verifySecret(settings.adminSecret)).ok) {
+    hideAuthGate();
+    await refreshAll();
     if (settings.autoStart) startAutoRefresh();
-  });
-}
+  } else {
+    showAuthGate(settings.adminSecret ? 'Saved admin secret is no longer valid.' : '');
+  }
+})();
 </script>
 </body>
 </html>
