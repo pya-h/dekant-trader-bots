@@ -49,6 +49,7 @@ type StatusRuntimeSnapshot = {
     markets: Array<{
       marketId: string;
       subject: string | null;
+      title: string | null;
       intervalMs: number;
       isOverride: boolean;
       lastCycleAt: string | null;

@@ -733,7 +733,9 @@
   }
   .auth-input-row input:focus { outline: none; border-color: var(--accent); }
   .auth-error { color: var(--red); font-size: 12px; margin-top: 10px; min-height: 16px; }
-  .auth-card .btn { width: 100%; margin-top: 16px; justify-content: center; }
+  .auth-input-row .btn { flex: 0 0 auto; }
+  /* Only the Connect button is full width — not the inline Show toggle. */
+  #btnAuth { width: 100%; margin-top: 16px; justify-content: center; }
 
   /* Per-operation event history inside the error popover */
   .pop-subhead {
@@ -836,11 +838,18 @@
     box-shadow: var(--shadow-lg);
     max-height: 220px;
     overflow-y: auto;
-    z-index: 60;
+    z-index: 100;
     display: none;
     animation: tabFadeIn 0.15s ease-out;
   }
   .picker-dropdown.active { display: block; }
+  /* The .animate-in elements keep a transform (animation fill-mode: both), which
+     makes each its own stacking context and traps the absolutely-positioned
+     dropdown behind later siblings. Lift every ancestor that holds an open picker
+     — the card AND any animate-in grid wrapping it — above the rest so the
+     dropdown overlays whatever sits below. */
+  .card:has(.picker-dropdown.active),
+  .animate-in:has(.picker-dropdown.active) { position: relative; z-index: 200; }
   .picker-dropdown .picker-search {
     position: sticky; top: 0;
     padding: 8px;
@@ -1051,17 +1060,7 @@
     </div>
     <div class="popover-body">
 
-      <div class="pop-subhead">Authentication</div>
-      <div class="field">
-        <label>Admin secret (x-security)</label>
-        <div class="settings-row">
-          <input id="setAdminSecret" type="password" placeholder="admin secret" autocomplete="off" spellcheck="false">
-          <button class="btn sm" onclick="toggleSecretVisible('setAdminSecret', this)">Show</button>
-        </div>
-        <div class="settings-hint">This panel is served by the bot — requests go to the same server. The admin secret is stored in this browser only.</div>
-      </div>
-
-      <div class="pop-subhead" style="margin-top:16px">Refresh</div>
+      <div class="pop-subhead">Refresh</div>
       <div class="field">
         <label>Auto-refresh interval (seconds)</label>
         <input id="setRefreshInterval" type="number" min="2" step="1" placeholder="30">
@@ -1125,25 +1124,50 @@
     <div class="response-box" id="miResponse"><pre></pre></div>
   </div>
 
-  <!-- Quick Actions -->
-  <div class="card animate-in" style="animation-delay: 0.1s">
-    <div class="card-title">Quick Actions</div>
-    <div class="actions-row" style="margin-bottom: 12px">
-      <button class="btn success" id="btnBuy" onclick="forceBuy()"><span class="spinner"></span> Force Buy</button>
-      <button class="btn danger" id="btnSell" onclick="forceSell()"><span class="spinner"></span> Force Sell</button>
-      <button class="btn" id="btnPrefund" onclick="prefund()"><span class="spinner"></span> Prefund All</button>
-    </div>
-    <div class="field">
-      <label>Market IDs (comma separated, leave empty for all)</label>
-      <div class="input-with-picker">
-        <input id="marketIdsInput" placeholder="e.g. market-id-1, market-id-2">
-        <button class="picker-btn" onclick="togglePicker('marketPicker', 'market')" title="Browse markets">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"/><path d="M3 12h18"/><path d="M3 18h18"/></svg>
-        </button>
-        <div class="picker-dropdown" id="marketPicker"></div>
+  <!-- Quick Actions + Ignored Markets (two equal columns) -->
+  <div class="section-grid animate-in" style="animation-delay: 0.1s">
+
+    <!-- Quick Actions -->
+    <div class="card">
+      <div class="card-title">Quick Actions</div>
+      <div class="actions-row" style="margin-bottom: 12px">
+        <button class="btn success" id="btnBuy" onclick="forceBuy()"><span class="spinner"></span> Force Buy</button>
+        <button class="btn danger" id="btnSell" onclick="forceSell()"><span class="spinner"></span> Force Sell</button>
+        <button class="btn" id="btnPrefund" onclick="prefund()"><span class="spinner"></span> Prefund All</button>
       </div>
+      <div class="field">
+        <label>Market IDs (comma separated, leave empty for all)</label>
+        <div class="input-with-picker">
+          <input id="marketIdsInput" placeholder="e.g. market-id-1, market-id-2">
+          <button class="picker-btn" onclick="togglePicker('marketPicker', 'market')" title="Browse markets">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"/><path d="M3 12h18"/><path d="M3 18h18"/></svg>
+          </button>
+          <div class="picker-dropdown" id="marketPicker"></div>
+        </div>
+      </div>
+      <div class="response-box" id="quickResponse"><pre></pre></div>
     </div>
-    <div class="response-box" id="quickResponse"><pre></pre></div>
+
+    <!-- Ignored Markets -->
+    <div class="card">
+      <div class="card-title">Ignored Markets</div>
+      <div class="field">
+        <label>Market IDs (comma separated)</label>
+        <div class="input-with-picker">
+          <input id="ignoredMarketIds" placeholder="market-id-1, market-id-2">
+          <button class="picker-btn" onclick="togglePicker('ignoredMarketPicker', 'market')" title="Browse markets">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"/><path d="M3 12h18"/><path d="M3 18h18"/></svg>
+          </button>
+          <div class="picker-dropdown" id="ignoredMarketPicker"></div>
+        </div>
+      </div>
+      <div class="actions-row" style="margin-top: 4px">
+        <button class="btn success sm" id="btnIgnoreAdd" onclick="addIgnored()"><span class="spinner"></span> Add to Ignored</button>
+        <button class="btn danger sm" id="btnIgnoreRm" onclick="removeIgnored()"><span class="spinner"></span> Remove from Ignored</button>
+      </div>
+      <div class="response-box" id="ignoredResponse"><pre></pre></div>
+    </div>
+
   </div>
 
   <!-- Summary Cards: Trade Stats + Balances -->
@@ -1371,25 +1395,6 @@
         <div class="response-box" id="fundResponse"><pre></pre></div>
       </div>
 
-      <!-- Ignored Markets -->
-      <div class="card">
-        <div class="card-title">Ignored Markets</div>
-        <div class="field">
-          <label>Market IDs (comma separated)</label>
-          <div class="input-with-picker">
-            <input id="ignoredMarketIds" placeholder="market-id-1, market-id-2">
-            <button class="picker-btn" onclick="togglePicker('ignoredMarketPicker', 'market')" title="Browse markets">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"/><path d="M3 12h18"/><path d="M3 18h18"/></svg>
-            </button>
-            <div class="picker-dropdown" id="ignoredMarketPicker"></div>
-          </div>
-        </div>
-        <div class="actions-row" style="margin-top: 4px">
-          <button class="btn success sm" id="btnIgnoreAdd" onclick="addIgnored()"><span class="spinner"></span> Add to Ignored</button>
-          <button class="btn danger sm" id="btnIgnoreRm" onclick="removeIgnored()"><span class="spinner"></span> Remove from Ignored</button>
-        </div>
-        <div class="response-box" id="ignoredResponse"><pre></pre></div>
-      </div>
     </div>
   </div>
 
@@ -1459,8 +1464,8 @@
     </div>
   </div>
 
-  <!-- Bot Keys (full-width row of its own — bots listed in a responsive grid) -->
-  <div class="card animate-in" style="animation-delay: 0.22s">
+  <!-- Bot Keys (hidden by default; revealed only via the Ctrl+Alt+! shortcut) -->
+  <div class="card animate-in" id="botKeysCard" style="animation-delay: 0.22s; display: none">
     <div class="card-title">Bot Keys</div>
     <p class="keys-note">
       Exports each bot's public key and its <strong>encrypted</strong> private key.
@@ -1932,6 +1937,14 @@ function fmtIntervalSecs(ms) {
   return s + 's';
 }
 
+// Display a market as "#{ID}: {SUBJECT}: {TITLE}" (subject/title omitted if absent).
+function marketLabel(id, subject, title) {
+  let label = '#' + id;
+  if (subject) label += ': ' + subject;
+  if (title) label += ': ' + title;
+  return label;
+}
+
 function renderMarketIntervals(runtime) {
   const sched = runtime && runtime.tradeSchedule;
   const sel = document.getElementById('miMarketSelect');
@@ -1947,9 +1960,8 @@ function renderMarketIntervals(runtime) {
   }
   const prev = sel.value;
   sel.innerHTML = sched.markets.map(m => {
-    const label = m.subject ? `${m.subject} (${m.marketId})` : m.marketId;
     const star = m.isOverride ? ' ★' : '';
-    return `<option value="${escapeHtml(m.marketId)}">${escapeHtml(label + star)}</option>`;
+    return `<option value="${escapeHtml(m.marketId)}">${escapeHtml(marketLabel(m.marketId, m.subject, m.title) + star)}</option>`;
   }).join('');
   if (prev && sched.markets.some(m => m.marketId === prev)) sel.value = prev;
   onSelectIntervalMarket();
@@ -2695,7 +2707,7 @@ async function fetchMarketList() {
   if (cachedMarketList) return cachedMarketList;
   const sched = cachedStatus?.runtime?.tradeSchedule;
   cachedMarketList = Array.isArray(sched?.markets)
-    ? sched.markets.map(m => ({ id: m.marketId, subject: m.subject || '' }))
+    ? sched.markets.map(m => ({ id: m.marketId, subject: m.subject || '', title: m.title || '' }))
     : [];
   return cachedMarketList;
 }
@@ -2751,7 +2763,7 @@ async function populatePicker(pickerId, entityType) {
     markets.forEach(mk => {
       const sel = currentValues.has(mk.id) ? ' selected' : '';
       html += `<div class="picker-item${sel}" data-entity-id="${escapeHtml(mk.id)}" onclick="pickEntity('${pickerId}','${mk.id}')">
-        <span><span class="picker-id">${escapeHtml(mk.subject || mk.id)}</span> <span class="picker-addr">${escapeHtml(mk.subject ? mk.id : '')}</span></span>
+        <span class="picker-id">${escapeHtml(marketLabel(mk.id, mk.subject, mk.title))}</span>
         <span class="picker-check">+</span>
       </div>`;
     });
@@ -2952,8 +2964,6 @@ function restartAutoRefreshIfActive() {
    Settings modal
    ──────────────────────────────────────────── */
 function openSettings() {
-  document.getElementById('setAdminSecret').value = settings.adminSecret || '';
-  document.getElementById('setAdminSecret').type = 'password';
   document.getElementById('setRefreshInterval').value = settings.refreshInterval || 30;
   document.getElementById('setAutoStart').checked = !!settings.autoStart;
   document.getElementById('setCompactBots').checked = !!settings.compactBots;
@@ -2982,9 +2992,7 @@ function applyEventLogDefaults() {
 
 function saveSettingsFromModal() {
   const interval = parseInt(document.getElementById('setRefreshInterval').value, 10);
-  const secret = document.getElementById('setAdminSecret').value;
 
-  settings.adminSecret = secret || '';
   settings.refreshInterval = interval > 0 ? interval : 30;
   settings.autoStart = document.getElementById('setAutoStart').checked;
   settings.compactBots = document.getElementById('setCompactBots').checked;
@@ -3134,8 +3142,21 @@ function renderEvents() {
 /* ────────────────────────────────────────────
    Keyboard Shortcuts
    ──────────────────────────────────────────── */
+function toggleBotKeysCard() {
+  const card = document.getElementById('botKeysCard');
+  if (!card) return;
+  card.style.display = (card.style.display === 'none') ? '' : 'none';
+}
+
 document.addEventListener('keydown', e => {
-  // Skip if user is typing in a form field
+  // Reveal/hide the (otherwise hidden) Bot Keys card with Ctrl+Alt+! (Shift+1).
+  // Works even when a field is focused; hidden again on every fresh page load.
+  if (e.ctrlKey && e.altKey && (e.key === '!' || e.code === 'Digit1')) {
+    e.preventDefault();
+    toggleBotKeysCard();
+    return;
+  }
+  // Skip the remaining single-key shortcuts while typing in a form field.
   if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
   if (e.key === 'r' && !e.ctrlKey && !e.metaKey) { e.preventDefault(); refreshAll(); }
   if (e.key === 'a' && !e.ctrlKey && !e.metaKey) { e.preventDefault(); toggleAutoRefresh(); }

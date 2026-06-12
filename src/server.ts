@@ -1160,6 +1160,7 @@ export async function createInitializedApp(
         return {
           marketId: market.id,
           subject: market.subject ?? null,
+          title: market.title ?? null,
           intervalMs,
           isOverride,
           lastCycleAt: last === undefined ? null : new Date(last).toISOString(),

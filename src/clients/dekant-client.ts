@@ -6,6 +6,8 @@ const marketSchema = z
   .object({
     id: z.string().regex(/^\d+$/, "id_must_be_numeric_string"),
     subject: z.string(),
+    // Human-readable market question/title (optional — only surfaced to the panel).
+    title: z.string().optional(),
     collateralMint: z.string().min(1).refine((value) => {
       try {
         new PublicKey(value);
