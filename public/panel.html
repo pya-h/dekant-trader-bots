@@ -1005,26 +1005,14 @@
     </div>
     <div class="popover-body">
 
-      <div class="pop-subhead">Connection</div>
-      <div class="field">
-        <label>Bot server URL (active)</label>
-        <select id="setBotUrlSelect" onchange="onSelectBotUrl()"></select>
-      </div>
-      <div class="field">
-        <label>Add a bot server URL</label>
-        <div class="settings-row">
-          <input id="setBotUrlNew" placeholder="https://bot.example.com" autocomplete="off" spellcheck="false">
-          <button class="btn sm primary" onclick="addBotUrl()">Add</button>
-          <button class="btn sm danger" onclick="removeBotUrl()" title="Remove the active URL from the list">Remove</button>
-        </div>
-        <div class="settings-hint" id="setProxyHint"></div>
-      </div>
+      <div class="pop-subhead">Authentication</div>
       <div class="field">
         <label>Admin secret (x-security)</label>
         <div class="settings-row">
           <input id="setAdminSecret" type="password" placeholder="admin secret" autocomplete="off" spellcheck="false">
           <button class="btn sm" onclick="toggleSecretVisible('setAdminSecret', this)">Show</button>
         </div>
+        <div class="settings-hint">This panel is served by the bot — requests go to the same server. The admin secret is stored in this browser only.</div>
       </div>
 
       <div class="pop-subhead" style="margin-top:16px">Refresh</div>
@@ -1061,6 +1049,34 @@
       <div class="stat-box"><div class="stat-value yellow" id="sv-uptime">--</div><div class="stat-label">Uptime</div></div>
       <div class="stat-box"><div class="stat-value" id="sv-lastTrade">--</div><div class="stat-label">Last Trade</div></div>
     </div>
+  </div>
+
+  <!-- Market Intervals -->
+  <div class="card animate-in" style="animation-delay: 0.075s">
+    <div class="card-title" style="display:flex;align-items:center;justify-content:space-between;gap:10px">
+      <span>Market Intervals</span>
+      <button class="btn sm icon-btn" id="btnRefreshMarkets" onclick="refreshMarkets()" title="Fetch markets from the backend now">
+        <span class="spinner"></span>
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
+      </button>
+    </div>
+    <p class="keys-note" style="margin-bottom:10px">
+      Each market runs its own buy + sell cycle on its own interval. New markets start at the default interval; override a single market here. Use the refresh button to re-fetch the market list now.
+    </p>
+    <div class="field">
+      <label>Market</label>
+      <select id="miMarketSelect" onchange="onSelectIntervalMarket()"></select>
+    </div>
+    <div class="field">
+      <label>Trade interval (seconds)</label>
+      <div class="settings-row">
+        <input id="miIntervalValue" type="number" min="1" step="1" placeholder="seconds">
+        <button class="btn sm primary" id="btnSetInterval" onclick="updateMarketInterval()">Update</button>
+        <button class="btn sm" id="btnResetInterval" onclick="resetMarketInterval()" title="Revert this market to the default interval">Default</button>
+      </div>
+      <div class="settings-hint" id="miHint">--</div>
+    </div>
+    <div class="response-box" id="miResponse"><pre></pre></div>
   </div>
 
   <!-- Quick Actions -->
@@ -1180,7 +1196,6 @@
       <div class="info-subhead">Services</div>
       <div class="info-row"><span class="info-key">Backend (Dekant)</span><span class="info-val" id="intBackend">--</span></div>
       <div class="info-row"><span class="info-key">Price API</span><span class="info-val" id="intPrice">--</span></div>
-      <div class="info-row"><span class="info-key">Solana RPC</span><span class="info-val" id="intRpc">--</span></div>
       <div class="info-subhead">Program</div>
       <div class="info-row"><span class="info-key">Program ID (in use)</span><span class="info-val" id="intProgramId">--</span></div>
       <div class="info-row"><span class="info-key">Resolved from</span><span class="info-val" id="intProgramSource">--</span></div>
@@ -1533,20 +1548,13 @@
 
 /* ────────────────────────────────────────────
    Settings (persisted in localStorage)
-   - Bot server URL: seeded from what panel-server.mjs provides, then user-managed.
-     Requests go to the panel-server proxy (same origin) with the selected URL in
-     an x-proxy-target header, so switching servers needs no restart and no CORS.
-   - Admin secret: seeded from the built-in default below, single value, editable.
+   - This panel is served BY the bot app itself, so requests go to the same
+     origin — there is no bot-server-URL setting any more.
+   - Admin secret: entered by the operator and kept in localStorage (single value).
    ──────────────────────────────────────────── */
-const INJECTED_BOT_URL = '__PANEL_BOT_URL__';                 // replaced by panel-server.mjs
-const PROXY_MODE = !INJECTED_BOT_URL.startsWith('__PANEL_');  // false when opened without the proxy
-const DEFAULT_ADMIN_SECRET = 'NOT_SET';
-const DEFAULT_BOT_URL = PROXY_MODE ? INJECTED_BOT_URL : window.location.origin;
 const SETTINGS_KEY = 'dekantPanel.settings.v1';
 const DEFAULT_SETTINGS = {
-  adminSecret: DEFAULT_ADMIN_SECRET,
-  botUrls: [DEFAULT_BOT_URL],
-  botUrl: DEFAULT_BOT_URL,
+  adminSecret: '',
   refreshInterval: 30,
   autoStart: false,
   compactBots: false,
@@ -1558,12 +1566,8 @@ function loadSettings() {
   try { s = JSON.parse(localStorage.getItem(SETTINGS_KEY) || 'null'); } catch { s = null; }
   if (!s || typeof s !== 'object') s = {};
   const merged = { ...DEFAULT_SETTINGS, ...s };
-  merged.botUrls = (Array.isArray(merged.botUrls) ? merged.botUrls : []).filter(Boolean);
-  if (!merged.botUrls.length) merged.botUrls = [DEFAULT_BOT_URL];
-  merged.botUrls = [...new Set(merged.botUrls)];
-  if (!merged.botUrls.includes(merged.botUrl)) merged.botUrl = merged.botUrls[0];
   if (!(merged.refreshInterval > 0)) merged.refreshInterval = 30;
-  if (!merged.adminSecret) merged.adminSecret = DEFAULT_ADMIN_SECRET;
+  if (typeof merged.adminSecret !== 'string') merged.adminSecret = '';
   return merged;
 }
 
@@ -1573,13 +1577,13 @@ function saveSettings() {
   try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); } catch (e) { /* storage disabled */ }
 }
 
-function getBase() { return PROXY_MODE ? window.location.origin : settings.botUrl; }
-function getSecret() { return settings.adminSecret || DEFAULT_ADMIN_SECRET; }
+// Same-origin: the app serves this page, so API calls use relative paths.
+function getBase() { return ''; }
+function getSecret() { return settings.adminSecret || ''; }
 
 async function api(method, path, body) {
   const url = getBase() + path;
   const headers = { 'x-security': getSecret() };
-  if (PROXY_MODE) headers['x-proxy-target'] = settings.botUrl;
   const opts = { method, headers };
   if (body !== undefined) {
     headers['Content-Type'] = 'application/json';
@@ -1779,6 +1783,7 @@ function renderStatus(data) {
   renderClaimStatus(runtime.claim);
   renderSystemInfo(data);
   renderIntegrations(runtime);
+  renderMarketIntervals(runtime);
 }
 
 function renderIntegrations(runtime) {
@@ -1789,7 +1794,6 @@ function renderIntegrations(runtime) {
 
   document.getElementById('intBackend').innerHTML = copyableText(integ.dekantBackendUrl);
   document.getElementById('intPrice').innerHTML = copyableText(integ.priceServiceUrl);
-  document.getElementById('intRpc').innerHTML = copyableText(integ.solanaRpcUrl);
   document.getElementById('intProgramId').innerHTML = copyableText(integ.dekantProgramId);
   setText('intProgramSource', integ.programIdSource === 'env' ? 'PROGRAM_ID env override' : 'Bundled IDL address');
   document.getElementById('intIdlProgramId').innerHTML =
@@ -1802,6 +1806,114 @@ function renderIntegrations(runtime) {
     matchEl.innerHTML = '<span class="int-ok">✓ matched</span>';
   } else {
     matchEl.innerHTML = '<span class="int-warn">⚠ mismatch — bots use the in-use ID above</span>';
+  }
+}
+
+/* ────────────────────────────────────────────
+   Market Intervals (per-market trade scheduler)
+   ──────────────────────────────────────────── */
+function fmtIntervalSecs(ms) {
+  if (!(ms > 0)) return '--';
+  const s = Math.round(ms / 1000);
+  if (s % 3600 === 0) return (s / 3600) + 'h';
+  if (s % 60 === 0) return (s / 60) + 'm';
+  return s + 's';
+}
+
+function renderMarketIntervals(runtime) {
+  const sched = runtime && runtime.tradeSchedule;
+  const sel = document.getElementById('miMarketSelect');
+  const hint = document.getElementById('miHint');
+  if (!sel) return;
+  if (!sched || !Array.isArray(sched.markets) || sched.markets.length === 0) {
+    sel.innerHTML = '<option value="">No active markets</option>';
+    if (hint) hint.textContent = sched
+      ? `Default ${fmtIntervalSecs(sched.defaultIntervalMs)} · scheduler ${sched.isRunning ? 'running' : 'stopped'} · no markets yet — try Refresh.`
+      : 'Scheduler data unavailable.';
+    onSelectIntervalMarket();
+    return;
+  }
+  const prev = sel.value;
+  sel.innerHTML = sched.markets.map(m => {
+    const label = m.subject ? `${m.subject} (${m.marketId})` : m.marketId;
+    const star = m.isOverride ? ' ★' : '';
+    return `<option value="${escapeHtml(m.marketId)}">${escapeHtml(label + star)}</option>`;
+  }).join('');
+  if (prev && sched.markets.some(m => m.marketId === prev)) sel.value = prev;
+  onSelectIntervalMarket();
+}
+
+function selectedScheduleMarket() {
+  const sched = cachedStatus && cachedStatus.runtime && cachedStatus.runtime.tradeSchedule;
+  const id = document.getElementById('miMarketSelect').value;
+  if (!sched || !id) return null;
+  return (sched.markets || []).find(m => m.marketId === id) || null;
+}
+
+function onSelectIntervalMarket() {
+  const sched = cachedStatus && cachedStatus.runtime && cachedStatus.runtime.tradeSchedule;
+  const m = selectedScheduleMarket();
+  const input = document.getElementById('miIntervalValue');
+  const hint = document.getElementById('miHint');
+  if (!m) { if (input) input.value = ''; return; }
+  if (input) input.value = Math.round(m.intervalMs / 1000);
+  if (hint) {
+    const def = sched ? fmtIntervalSecs(sched.defaultIntervalMs) : '--';
+    const due = m.nextDueAt ? new Date(m.nextDueAt).toLocaleTimeString() : '—';
+    hint.textContent = `Effective ${fmtIntervalSecs(m.intervalMs)} · ${m.isOverride ? 'custom override' : 'default ' + def} · next cycle ~${due}`;
+  }
+}
+
+async function updateMarketInterval() {
+  const id = document.getElementById('miMarketSelect').value;
+  if (!id) { toast('Select a market', 'error'); return; }
+  const secs = parseInt(document.getElementById('miIntervalValue').value, 10);
+  if (!(secs > 0)) { toast('Enter a positive interval (seconds)', 'error'); return; }
+  setLoading('btnSetInterval', true);
+  try {
+    const res = await api('POST', '/admin/markets/intervals', { intervals: [{ market_id: id, interval_ms: secs * 1000 }] });
+    showResponse('miResponse', res);
+    toast('Interval updated');
+    await loadStatus();
+  } catch (e) {
+    showResponse('miResponse', e.data || { error: e.message });
+    toast(e.message || 'Failed to update interval', 'error');
+  } finally {
+    setLoading('btnSetInterval', false);
+  }
+}
+
+async function resetMarketInterval() {
+  const id = document.getElementById('miMarketSelect').value;
+  if (!id) { toast('Select a market', 'error'); return; }
+  setLoading('btnResetInterval', true);
+  try {
+    const res = await api('POST', '/admin/markets/intervals', { intervals: [{ market_id: id, interval_ms: null }] });
+    showResponse('miResponse', res);
+    toast('Reverted to default');
+    await loadStatus();
+  } catch (e) {
+    showResponse('miResponse', e.data || { error: e.message });
+    toast(e.message || 'Failed to reset interval', 'error');
+  } finally {
+    setLoading('btnResetInterval', false);
+  }
+}
+
+async function refreshMarkets() {
+  setLoading('btnRefreshMarkets', true);
+  try {
+    const res = await api('POST', '/admin/markets/refresh');
+    showResponse('miResponse', res);
+    const n = res.result && typeof res.result.count === 'number' ? res.result.count : null;
+    toast(n === null ? 'Markets refreshed' : `Markets refreshed (${n} active)`);
+    cachedMarketList = null; // re-derive pickers from the fresh status
+    await refreshAll();
+  } catch (e) {
+    showResponse('miResponse', e.data || { error: e.message });
+    toast(e.message || 'Failed to refresh markets', 'error');
+  } finally {
+    setLoading('btnRefreshMarkets', false);
   }
 }
 
@@ -2467,13 +2579,12 @@ async function fetchBotList() {
 }
 
 async function fetchMarketList() {
-  // No direct "list all markets" endpoint. Derive from stats trade data if available,
-  // or show a helpful message. Markets aren't individually exposed via API.
+  // The active market set is exposed via the trade-scheduler snapshot in /status.
   if (cachedMarketList) return cachedMarketList;
-  // Try to get market info from cached status response (ignoredMarketIds at least)
-  const ignored = cachedStatus?.runtime?.observability?.jobs || {};
-  // The backend doesn't expose market list. Return empty — the picker will show a hint.
-  cachedMarketList = [];
+  const sched = cachedStatus?.runtime?.tradeSchedule;
+  cachedMarketList = Array.isArray(sched?.markets)
+    ? sched.markets.map(m => ({ id: m.marketId, subject: m.subject || '' }))
+    : [];
   return cachedMarketList;
 }
 
@@ -2514,12 +2625,25 @@ async function populatePicker(pickerId, entityType) {
     });
     dropdown.innerHTML = html;
   } else {
-    // Market picker — no API to list markets, so show text input hint
-    dropdown.innerHTML = `<div style="padding:12px;text-align:center;color:var(--text2);font-size:11px;line-height:1.5">
-      No market listing endpoint available.<br>
-      Enter market IDs manually, or paste from<br>
-      the Dekant backend.
-    </div>`;
+    dropdown.innerHTML = '<div style="padding:12px;text-align:center;color:var(--text2);font-size:11px">Loading markets...</div>';
+    const markets = await fetchMarketList();
+    if (markets.length === 0) {
+      dropdown.innerHTML = `<div style="padding:12px;text-align:center;color:var(--text2);font-size:11px;line-height:1.5">
+        No markets loaded yet.<br>
+        Use the Market Intervals → Refresh button,<br>
+        or enter market IDs manually.
+      </div>`;
+      return;
+    }
+    let html = '<div class="picker-search"><input placeholder="Search markets..." oninput="filterPicker(this)"></div>';
+    markets.forEach(mk => {
+      const sel = currentValues.has(mk.id) ? ' selected' : '';
+      html += `<div class="picker-item${sel}" data-entity-id="${escapeHtml(mk.id)}" onclick="pickEntity('${pickerId}','${mk.id}')">
+        <span><span class="picker-id">${escapeHtml(mk.subject || mk.id)}</span> <span class="picker-addr">${escapeHtml(mk.subject ? mk.id : '')}</span></span>
+        <span class="picker-check">+</span>
+      </div>`;
+    });
+    dropdown.innerHTML = html;
   }
 }
 
@@ -2715,24 +2839,13 @@ function restartAutoRefreshIfActive() {
 /* ────────────────────────────────────────────
    Settings modal
    ──────────────────────────────────────────── */
-function fillBotUrlSelect() {
-  const sel = document.getElementById('setBotUrlSelect');
-  sel.innerHTML = settings.botUrls.map(u =>
-    `<option value="${escapeHtml(u)}"${u === settings.botUrl ? ' selected' : ''}>${escapeHtml(u)}</option>`
-  ).join('');
-}
-
 function openSettings() {
-  fillBotUrlSelect();
   document.getElementById('setAdminSecret').value = settings.adminSecret || '';
   document.getElementById('setAdminSecret').type = 'password';
   document.getElementById('setRefreshInterval').value = settings.refreshInterval || 30;
   document.getElementById('setAutoStart').checked = !!settings.autoStart;
   document.getElementById('setCompactBots').checked = !!settings.compactBots;
   document.getElementById('setCompactMsgs').checked = !!settings.compactMsgs;
-  document.getElementById('setProxyHint').textContent = PROXY_MODE
-    ? 'Requests route through panel-server.mjs; the active URL is sent per request — switch servers without a restart.'
-    : 'Opened without panel-server.mjs — requests go directly to the active URL (the bot must allow CORS).';
   document.getElementById('settingsOverlay').classList.add('active');
 }
 
@@ -2740,31 +2853,6 @@ function closeSettings() {
   const ov = document.getElementById('settingsOverlay');
   ov.classList.add('closing');
   setTimeout(() => ov.classList.remove('active', 'closing'), 150);
-}
-
-function onSelectBotUrl() { /* selection is committed on Save */ }
-
-function addBotUrl() {
-  const input = document.getElementById('setBotUrlNew');
-  const url = (input.value || '').trim().replace(/\/+$/, '');
-  if (!url) { toast('Enter a URL', 'error'); return; }
-  try { new URL(url); } catch { toast('Invalid URL', 'error'); return; }
-  const sel = document.getElementById('setBotUrlSelect');
-  if (![...sel.options].some(o => o.value === url)) {
-    const opt = document.createElement('option');
-    opt.value = url; opt.textContent = url;
-    sel.appendChild(opt);
-  }
-  sel.value = url;
-  input.value = '';
-  toast('Added — click Save to apply');
-}
-
-function removeBotUrl() {
-  const sel = document.getElementById('setBotUrlSelect');
-  if (sel.options.length <= 1) { toast('Keep at least one URL', 'error'); return; }
-  sel.remove(sel.selectedIndex);
-  sel.selectedIndex = 0;
 }
 
 function toggleSecretVisible(id, btn) {
@@ -2781,14 +2869,10 @@ function applyEventLogDefaults() {
 }
 
 function saveSettingsFromModal() {
-  const sel = document.getElementById('setBotUrlSelect');
-  const urls = [...sel.options].map(o => o.value);
   const interval = parseInt(document.getElementById('setRefreshInterval').value, 10);
   const secret = document.getElementById('setAdminSecret').value;
 
-  settings.botUrls = urls.length ? urls : [DEFAULT_BOT_URL];
-  settings.botUrl = sel.value || settings.botUrls[0];
-  settings.adminSecret = secret || DEFAULT_ADMIN_SECRET;
+  settings.adminSecret = secret || '';
   settings.refreshInterval = interval > 0 ? interval : 30;
   settings.autoStart = document.getElementById('setAutoStart').checked;
   settings.compactBots = document.getElementById('setCompactBots').checked;
@@ -2949,9 +3033,16 @@ document.addEventListener('keydown', e => {
    Init
    ──────────────────────────────────────────── */
 applyEventLogDefaults();           // seed event-log compact toggles from saved settings
-refreshAll().then(() => {
-  if (settings.autoStart) startAutoRefresh();
-});
+if (!settings.adminSecret) {
+  // Served by the bot but not yet authenticated — guide the operator to set the
+  // admin secret before the first (otherwise 401) requests fire.
+  toast('Enter the admin secret in Settings to connect', 'error');
+  openSettings();
+} else {
+  refreshAll().then(() => {
+    if (settings.autoStart) startAutoRefresh();
+  });
+}
 </script>
 </body>
 </html>

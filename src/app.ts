@@ -38,7 +38,6 @@ type StatusRuntimeSnapshot = {
   integration?: {
     dekantBackendUrl?: string;
     priceServiceUrl?: string;
-    solanaRpcUrl?: string;
     dekantProgramId?: string;
     idlProgramId?: string | null;
     programIdSource?: string;
@@ -49,6 +48,7 @@ type StatusRuntimeSnapshot = {
     defaultIntervalMs: number;
     markets: Array<{
       marketId: string;
+      subject: string | null;
       intervalMs: number;
       isOverride: boolean;
       lastCycleAt: string | null;
@@ -92,6 +92,7 @@ type AdminHandlers = {
   getStats?: (input: { page: number; pageSize: number }) => Promise<StatsPage>;
   addIgnoredMarkets?: (input: { marketIds: string[] }) => Promise<unknown>;
   removeIgnoredMarkets?: (input: { marketIds: string[] }) => Promise<unknown>;
+  forceRefreshMarkets?: () => Promise<unknown>;
   getBotBalances?: (input: { page: number; pageSize: number }) => Promise<BotBalancesPage>;
   getBotKeys?: () => Promise<BotKeyExport>;
   getEvents?: (input: { limit?: number }) => EventLogSnapshot | Promise<EventLogSnapshot>;
@@ -180,7 +181,8 @@ export function buildApp(
   config: AppConfig,
   runtimeSnapshot?: RuntimeSnapshotInput,
   adminHandlers: AdminHandlers = {},
-  logger?: StructuredLogger
+  logger?: StructuredLogger,
+  panelHtml?: string | null
 ): FastifyInstance {
   const app = Fastify({ logger: false });
 
@@ -252,6 +254,16 @@ export function buildApp(
   app.get("/health", async () => {
     return { status: "ok" };
   });
+
+  // Serve the admin panel (a single static HTML file) at the root when provided.
+  // The page is just the shell — every API call it makes carries the admin secret
+  // in the x-security header, so the HTML itself needs no auth.
+  if (panelHtml) {
+    const sendPanel = async (_request: unknown, reply: { type: (t: string) => { send: (b: string) => unknown } }) =>
+      reply.type("text/html; charset=utf-8").send(panelHtml);
+    app.get("/", sendPanel);
+    app.get("/panel", sendPanel);
+  }
 
   app.register(
     async (adminScope) => {
@@ -545,6 +557,20 @@ export function buildApp(
           }))
         });
 
+        return {
+          status: "ok",
+          result
+        };
+      });
+
+      // Manually trigger a market-list refresh now (the same fetch the market loop
+      // runs on its interval). No body — refreshes the full active market set.
+      adminScope.post("/markets/refresh", async (request, reply) => {
+        if (!adminHandlers.forceRefreshMarkets) {
+          return reply.code(503).send({ error: "market_control_unavailable" });
+        }
+
+        const result = await adminHandlers.forceRefreshMarkets();
         return {
           status: "ok",
           result

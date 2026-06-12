@@ -27,6 +27,8 @@ COPY --chown=node:node --from=builder /app/package.json /app/package-lock.json .
 COPY --chown=node:node --from=builder /app/node_modules ./node_modules
 COPY --chown=node:node --from=builder /app/dist ./dist
 COPY --chown=node:node --from=builder /app/scripts ./scripts
+# The admin panel HTML the app serves at `/` (read at runtime from <root>/public).
+COPY --chown=node:node public ./public
 
 USER node
 EXPOSE 3000

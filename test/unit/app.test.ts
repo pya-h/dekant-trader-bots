@@ -76,4 +76,28 @@ describe("buildApp", () => {
 
     await app.close();
   });
+
+  it("serves the panel HTML at / and /panel when provided (no auth)", async () => {
+    const app = buildApp(testConfig, undefined, {}, undefined, "<html><body>PANEL</body></html>");
+    await app.ready();
+
+    for (const url of ["/", "/panel"]) {
+      const res = await app.inject({ method: "GET", url });
+      expect(res.statusCode).toBe(200);
+      expect(res.headers["content-type"]).toContain("text/html");
+      expect(res.body).toContain("PANEL");
+    }
+
+    await app.close();
+  });
+
+  it("does not register a panel route when no panel HTML is provided", async () => {
+    const app = buildApp(testConfig);
+    await app.ready();
+
+    const res = await app.inject({ method: "GET", url: "/" });
+    expect(res.statusCode).toBe(404);
+
+    await app.close();
+  });
 });

@@ -175,4 +175,47 @@ describe("per-market trade scheduler", () => {
 
     await appCtx.app.close();
   });
+
+  it("manually refreshes the market list via the admin endpoint", async () => {
+    const { env, appCtx } = await setup();
+
+    const res = await request(appCtx.app.server)
+      .post("/admin/markets/refresh")
+      .set("x-security", env.ADMIN_SECRET as string);
+
+    expect(res.status).toBe(200);
+    expect(res.body.result.updated).toBe(true);
+    expect(res.body.result.count).toBe(2);
+
+    await appCtx.app.close();
+  });
+
+  it("never exposes the Solana RPC URL in the status integration", async () => {
+    const { env, appCtx } = await setup();
+
+    const status = await request(appCtx.app.server)
+      .get("/admin/status")
+      .set("x-security", env.ADMIN_SECRET as string);
+
+    expect(status.status).toBe(200);
+    const integration = status.body.runtime.integration;
+    expect(integration.dekantBackendUrl).toBeTruthy();
+    expect(integration.priceServiceUrl).toBeTruthy();
+    expect(integration.solanaRpcUrl).toBeUndefined();
+    // Defensive: the raw RPC URL must not leak anywhere in the response body.
+    expect(JSON.stringify(status.body)).not.toContain("rpc.example.com");
+
+    await appCtx.app.close();
+  });
+
+  it("serves the admin panel HTML at / (same-origin, no auth)", async () => {
+    const { appCtx } = await setup();
+
+    const res = await request(appCtx.app.server).get("/");
+    expect(res.status).toBe(200);
+    expect(res.headers["content-type"]).toContain("text/html");
+    expect(res.text).toContain("Market Intervals");
+
+    await appCtx.app.close();
+  });
 });

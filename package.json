@@ -6,7 +6,6 @@
   "description": "Bot manager service for DekantPM",
   "scripts": {
     "dev": "tsx src/server.ts",
-    "panel": "node panel-server.mjs",
     "program-sync": "node scripts/program-sync.mjs",
     "build": "tsc -p tsconfig.build.json",
     "start": "node dist/server.js",

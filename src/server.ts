@@ -1,4 +1,6 @@
-import { pathToFileURL } from "node:url";
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { Connection, PublicKey } from "@solana/web3.js";
 import dotenv from "dotenv";
 import { buildApp } from "./app.js";
@@ -57,6 +59,20 @@ const defaultLoopIntervalProvider: LoopIntervalProvider = {
   setInterval: (handler, intervalMs) => setInterval(handler, intervalMs),
   clearInterval: (handle) => clearInterval(handle as NodeJS.Timeout)
 };
+
+// The admin panel is a single static HTML file served by this app at `/`. It
+// lives at <repo>/public/panel.html, resolved relative to this module so it works
+// from both src (tsx/dev) and dist (built). Loaded once at import; null if absent.
+function loadPanelHtml(): string | null {
+  try {
+    const here = dirname(fileURLToPath(import.meta.url));
+    return readFileSync(join(here, "..", "public", "panel.html"), "utf8");
+  } catch {
+    return null;
+  }
+}
+
+const PANEL_HTML = loadPanelHtml();
 
 function safeInfo(logger: StructuredLogger, event: string, fields?: Record<string, unknown>) {
   logger.info?.(event, fields);
@@ -1143,6 +1159,7 @@ export async function createInitializedApp(
         const isOverride = typeof state.runtimeConfig.config.marketIntervals[market.id] === "number";
         return {
           marketId: market.id,
+          subject: market.subject ?? null,
           intervalMs,
           isOverride,
           lastCycleAt: last === undefined ? null : new Date(last).toISOString(),
@@ -1252,10 +1269,18 @@ export async function createInitializedApp(
       // every config field (not just buy/sell/max) and the supported-mint /
       // ignored-market lists. Read-only snapshot; mutate via PATCH /admin/config.
       config: state.runtimeConfig.config,
-      // Static integration targets the bot talks to (backend, price service, RPC)
-      // and the resolved vs. IDL program id — surfaced so the panel can show them
-      // and operators can spot a program/IDL mismatch. No secrets here.
-      integration: config.integration,
+      // Static integration targets the bot talks to (backend, price service) and
+      // the resolved vs. IDL program id — surfaced so the panel can show them and
+      // operators can spot a program/IDL mismatch. The Solana RPC URL is
+      // deliberately omitted: it often embeds an API key and must never reach the
+      // panel/admin response.
+      integration: {
+        dekantBackendUrl: config.integration.dekantBackendUrl,
+        priceServiceUrl: config.integration.priceServiceUrl,
+        dekantProgramId: config.integration.dekantProgramId,
+        idlProgramId: config.integration.idlProgramId,
+        programIdSource: config.integration.programIdSource
+      },
       // Per-market trade scheduler state: the default interval, the tick cadence
       // and each market's effective interval + last/next cycle time. Lets the
       // panel surface and manage per-market timings.
@@ -1317,6 +1342,10 @@ export async function createInitializedApp(
         : undefined,
       addIgnoredMarkets: async (input: { marketIds: string[] }) => addIgnoredMarketIds(input.marketIds),
       removeIgnoredMarkets: async (input: { marketIds: string[] }) => removeIgnoredMarketIds(input.marketIds),
+      // Manually trigger the market-list refresh (same pass the market loop runs
+      // on its interval) so the panel can force an immediate fetch. The busy guard
+      // inside runMarketRefresh makes a concurrent manual+scheduled call safe.
+      forceRefreshMarkets: marketCache ? async () => runMarketRefresh() : undefined,
       getBotBalances: balanceClient
         ? async (input: { page: number; pageSize: number }) => getBotBalances(input)
         : undefined,
@@ -1340,7 +1369,8 @@ export async function createInitializedApp(
               updateMarketIntervals(input.intervals)
           : undefined
     },
-    logger
+    logger,
+    PANEL_HTML
   );
 
   app.addHook("onClose", async () => {

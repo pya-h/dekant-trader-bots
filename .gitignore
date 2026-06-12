@@ -5,6 +5,8 @@ dist/
 coverage/
 *.log
 docs
+# Standalone local panel + proxy (backup of the pre-app-served panel).
+local/
 
 !.env.example
 .claude
